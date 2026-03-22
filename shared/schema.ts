@@ -7,7 +7,9 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  passwordHash: text("password_hash").notNull().default(""),
+  googleId: text("google_id"),
+  openaiApiKey: text("openai_api_key"),
   preferredLanguage: text("preferred_language").notNull().default("en"), // en | hi | mr
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });

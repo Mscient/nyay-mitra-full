@@ -15,7 +15,14 @@ import jwt from "jsonwebtoken";
 import OpenAI from "openai";
 
 const JWT_SECRET = process.env.JWT_SECRET || "nyay-mitra-jwt-secret-change-in-production";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+
+// Helper to strip sensitive fields from user object
+function toPublicUser(user: any) {
+  const { passwordHash, openaiApiKey, ...pub } = user;
+  return { ...pub, hasApiKey: !!openaiApiKey };
+}
 
 // ── Auth middleware ────────────────────────────────────────────────────────
 interface AuthRequest extends Request {
@@ -184,8 +191,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     });
 
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
-    const { passwordHash: _, ...publicUser } = user;
-    res.status(201).json({ token, user: publicUser });
+    res.status(201).json({ token, user: toPublicUser(user) });
   });
 
   app.post("/api/auth/login", async (req, res) => {
@@ -200,15 +206,57 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (!valid) return res.status(401).json({ error: "Invalid email or password" });
 
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
-    const { passwordHash: _, ...publicUser } = user;
-    res.json({ token, user: publicUser });
+    res.json({ token, user: toPublicUser(user) });
+  });
+
+  // ── Google Sign-In ──────────────────────────────────────────────
+  app.post("/api/auth/google", async (req, res) => {
+    const { credential } = req.body;
+    if (!credential) return res.status(400).json({ error: "Google credential required" });
+    if (!GOOGLE_CLIENT_ID) return res.status(500).json({ error: "Google OAuth not configured" });
+
+    try {
+      // Verify Google ID token by calling Google's tokeninfo endpoint
+      const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+      if (!verifyRes.ok) return res.status(401).json({ error: "Invalid Google token" });
+
+      const payload: any = await verifyRes.json();
+      if (payload.aud !== GOOGLE_CLIENT_ID) return res.status(401).json({ error: "Token audience mismatch" });
+
+      const { sub: googleId, email, name, picture } = payload;
+
+      // Check if user exists by Google ID or email
+      let user = storage.getUserByGoogleId(googleId);
+      if (!user) {
+        user = storage.getUserByEmail(email);
+        if (user) {
+          // Link Google to existing account
+          storage.updateUserGoogleId(user.id, googleId);
+        } else {
+          // Create new user from Google
+          user = storage.createUser({
+            id: randomUUID(),
+            name: name || email.split("@")[0],
+            email,
+            passwordHash: "",
+            googleId,
+            preferredLanguage: "en",
+          });
+        }
+      }
+
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
+      res.json({ token, user: toPublicUser(user) });
+    } catch (err: any) {
+      console.error("[Google Auth Error]", err.message);
+      res.status(500).json({ error: "Google authentication failed" });
+    }
   });
 
   app.get("/api/auth/me", authRequired, (req: AuthRequest, res) => {
     const user = storage.getUserById(req.userId!);
     if (!user) return res.status(404).json({ error: "User not found" });
-    const { passwordHash: _, ...publicUser } = user;
-    res.json(publicUser);
+    res.json(toPublicUser(user));
   });
 
   app.patch("/api/auth/language", authRequired, (req: AuthRequest, res) => {
@@ -218,8 +266,24 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
     const user = storage.updateUserLanguage(req.userId!, parsed.data.language);
     if (!user) return res.status(404).json({ error: "User not found" });
-    const { passwordHash: _, ...publicUser } = user;
-    res.json(publicUser);
+    res.json(toPublicUser(user));
+  });
+
+  // ── BYOK (Bring Your Own Key) ──────────────────────────────────
+  app.patch("/api/auth/api-key", authRequired, (req: AuthRequest, res) => {
+    const schema = z.object({ apiKey: z.string().min(1) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "API key required" });
+
+    const user = storage.updateUserApiKey(req.userId!, parsed.data.apiKey);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(toPublicUser(user));
+  });
+
+  app.delete("/api/auth/api-key", authRequired, (req: AuthRequest, res) => {
+    const user = storage.updateUserApiKey(req.userId!, null);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(toPublicUser(user));
   });
 
   // ── Sessions ──────────────────────────────────────────────────
@@ -267,7 +331,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json(msgs);
   });
 
-  app.post("/api/sessions/:id/chat", async (req, res) => {
+  app.post("/api/sessions/:id/chat", authOptional, async (req: AuthRequest, res) => {
     const session = storage.getSession(req.params.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
 
@@ -293,13 +357,22 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     let aiContent = "";
     let citations: string[] = [];
 
-    if (openai) {
+    // Determine which OpenAI client to use: user's BYOK key > server key > demo
+    let activeOpenAI = openai;
+    if (req.userId) {
+      const currentUser = storage.getUserById(req.userId);
+      if (currentUser?.openaiApiKey) {
+        activeOpenAI = new OpenAI({ apiKey: currentUser.openaiApiKey });
+      }
+    }
+
+    if (activeOpenAI) {
       try {
         const history = storage.listMessages(req.params.id).slice(-10);
         const systemPrompt = LEGAL_SYSTEM_PROMPT[language as keyof typeof LEGAL_SYSTEM_PROMPT] || LEGAL_SYSTEM_PROMPT.en;
         const categoryContext = CATEGORY_PROMPTS[session.category] || CATEGORY_PROMPTS.general;
 
-        const completion = await openai.chat.completions.create({
+        const completion = await activeOpenAI.chat.completions.create({
           model: "gpt-4o-mini",
           temperature: 0.3,
           messages: [

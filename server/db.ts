@@ -21,7 +21,9 @@ sqlite.exec(`
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
+    password_hash TEXT NOT NULL DEFAULT '',
+    google_id TEXT,
+    openai_api_key TEXT,
     preferred_language TEXT NOT NULL DEFAULT 'en',
     created_at INTEGER NOT NULL
   );

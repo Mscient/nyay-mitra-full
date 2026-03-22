@@ -13,7 +13,10 @@ export interface IStorage {
   createUser(data: InsertUser): User;
   getUserById(id: string): User | undefined;
   getUserByEmail(email: string): User | undefined;
+  getUserByGoogleId(googleId: string): User | undefined;
   updateUserLanguage(id: string, lang: string): User | undefined;
+  updateUserApiKey(id: string, apiKey: string | null): User | undefined;
+  updateUserGoogleId(id: string, googleId: string): User | undefined;
 
   // Sessions
   listSessions(userId?: string): Session[];
@@ -49,6 +52,26 @@ class DatabaseStorage implements IStorage {
   updateUserLanguage(id: string, lang: string): User | undefined {
     return db.update(users)
       .set({ preferredLanguage: lang })
+      .where(eq(users.id, id))
+      .returning()
+      .get();
+  }
+
+  getUserByGoogleId(googleId: string): User | undefined {
+    return db.select().from(users).where(eq(users.googleId, googleId)).get();
+  }
+
+  updateUserApiKey(id: string, apiKey: string | null): User | undefined {
+    return db.update(users)
+      .set({ openaiApiKey: apiKey })
+      .where(eq(users.id, id))
+      .returning()
+      .get();
+  }
+
+  updateUserGoogleId(id: string, googleId: string): User | undefined {
+    return db.update(users)
+      .set({ googleId })
       .where(eq(users.id, id))
       .returning()
       .get();

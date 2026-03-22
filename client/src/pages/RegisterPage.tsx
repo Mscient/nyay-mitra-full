@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage, LANGUAGES, type Language } from "@/contexts/LanguageContext";
@@ -10,8 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Scale, Moon, Sun, Eye, EyeOff } from "lucide-react";
 
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
+
+const GOOGLE_CLIENT_ID = "450969618266-iom7rkqvkfh1teb4p3tlupsq1hlgh041.apps.googleusercontent.com";
+
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const { t, setLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const [, navigate] = useLocation();
@@ -23,6 +31,39 @@ export default function RegisterPage() {
   const [lang, setLang] = useState<Language>("en");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const initGoogle = () => {
+      if (window.google?.accounts?.id && googleBtnRef.current) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleResponse,
+        });
+        window.google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: theme === "dark" ? "filled_black" : "outline",
+          size: "large",
+          width: "100%",
+          text: "signup_with",
+          shape: "rectangular",
+        });
+      }
+    };
+    const timer = setTimeout(initGoogle, 500);
+    return () => clearTimeout(timer);
+  }, [theme]);
+
+  async function handleGoogleResponse(response: any) {
+    setIsLoading(true);
+    try {
+      await loginWithGoogle(response.credential);
+      navigate("/chat");
+    } catch (err: any) {
+      toast({ title: "Google signup failed", description: err.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,6 +114,18 @@ export default function RegisterPage() {
             >
               {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
+          </div>
+
+          {/* Google Sign-Up Button */}
+          <div ref={googleBtnRef} className="w-full mb-4 flex justify-center [&>div]:!w-full" />
+
+          <div className="relative mb-4">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or register with email</span>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

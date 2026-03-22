@@ -12,7 +12,7 @@ import {
   Scale, Moon, Sun, Plus, Trash2, Send, Bookmark,
   Copy, CheckCheck, ChevronLeft, Menu, X, Globe,
   Gavel, Heart, Briefcase, ShoppingCart, Home,
-  FileText, BookOpen, Shield, MessageSquare, LogIn
+  FileText, BookOpen, Shield, MessageSquare, LogIn, Key
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +46,7 @@ function parseMarkdown(text: string): string {
 export default function ChatPage() {
   const [, params] = useRoute("/chat/:sessionId");
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, setApiKey, removeApiKey } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
@@ -56,6 +56,8 @@ export default function ChatPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [savingKey, setSavingKey] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -223,6 +225,58 @@ export default function ChatPage() {
           })}
         </div>
       </div>
+
+      {/* BYOK: Use your own GPT key */}
+      {user && (
+        <div className="px-3 pb-2">
+          <div className="text-xs text-sidebar-foreground/50 font-medium uppercase tracking-wider mb-2 px-1">Use Your Own GPT</div>
+          <div className="bg-sidebar-accent/50 rounded-lg p-2.5">
+            {user.hasApiKey ? (
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <span className="text-xs text-sidebar-foreground/80 flex-1">API key active ✓</span>
+                <button
+                  onClick={async () => {
+                    setSavingKey(true);
+                    try { await removeApiKey(); } finally { setSavingKey(false); }
+                  }}
+                  disabled={savingKey}
+                  className="text-xs text-red-400 hover:text-red-300 font-medium"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-1.5">
+                  <input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="sk-..."
+                    className="flex-1 text-xs bg-sidebar-accent rounded px-2 py-1.5 text-sidebar-foreground placeholder:text-sidebar-foreground/30 outline-none border border-sidebar-border focus:border-sidebar-primary"
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!apiKeyInput.trim()) return;
+                      setSavingKey(true);
+                      try {
+                        await setApiKey(apiKeyInput.trim());
+                        setApiKeyInput("");
+                      } finally { setSavingKey(false); }
+                    }}
+                    disabled={savingKey || !apiKeyInput.trim()}
+                    className="text-xs bg-sidebar-primary text-sidebar-primary-foreground px-2.5 py-1.5 rounded font-medium hover:bg-sidebar-primary/90 disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="text-xs text-sidebar-foreground/40 mt-1.5">Enter your OpenAI API key for real AI responses</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Session history */}
       <div className="flex-1 overflow-y-auto px-3 pb-3">
