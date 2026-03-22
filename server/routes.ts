@@ -1,9 +1,12 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import db from "./db";
+import { desc } from "drizzle-orm";
 import {
   insertSessionSchema, insertMessageSchema, insertBookmarkSchema,
   registerSchema,
+  users, sessions, messages, bookmarks,
 } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
@@ -363,6 +366,58 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const deleted = storage.deleteBookmark(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Bookmark not found" });
     res.json({ success: true });
+  });
+
+  // ── Admin endpoints ────────────────────────────────────────────
+  const ADMIN_SECRET = process.env.ADMIN_SECRET || "nyay-mitra-admin-2026";
+
+  function adminAuth(req: Request, res: Response, next: NextFunction) {
+    const secret = req.headers["x-admin-secret"] || req.query.secret;
+    if (secret !== ADMIN_SECRET) {
+      return res.status(403).json({ error: "Forbidden — invalid admin secret" });
+    }
+    next();
+  }
+
+  app.get("/api/admin/stats", adminAuth, (_req, res) => {
+    const allUsers = storage.listSessions(); // get all sessions
+    const userCount = db.select().from(users).all().length;
+    const sessionCount = db.select().from(sessions).all().length;
+    const messageCount = db.select().from(messages).all().length;
+    const bookmarkCount = db.select().from(bookmarks).all().length;
+    res.json({ userCount, sessionCount, messageCount, bookmarkCount });
+  });
+
+  app.get("/api/admin/users", adminAuth, (_req, res) => {
+    const allUsers = db.select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      preferredLanguage: users.preferredLanguage,
+      createdAt: users.createdAt,
+    }).from(users).all();
+    res.json(allUsers);
+  });
+
+  app.get("/api/admin/sessions", adminAuth, (_req, res) => {
+    const allSessions = db.select().from(sessions)
+      .orderBy(desc(sessions.updatedAt))
+      .all();
+    res.json(allSessions);
+  });
+
+  app.get("/api/admin/messages", adminAuth, (req, res) => {
+    const sessionId = req.query.sessionId as string;
+    if (sessionId) {
+      const msgs = storage.listMessages(sessionId);
+      return res.json(msgs);
+    }
+    // Return last 100 messages
+    const allMsgs = db.select().from(messages)
+      .orderBy(desc(messages.createdAt))
+      .limit(100)
+      .all();
+    res.json(allMsgs);
   });
 
   // ── Health check ───────────────────────────────────────────────
