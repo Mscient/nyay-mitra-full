@@ -10,6 +10,10 @@ import LandingPage from "@/pages/LandingPage";
 import ChatPage from "@/pages/ChatPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
+import DocumentGeneratorPage from "@/pages/DocumentGeneratorPage";
+import NALSACheckerPage from "@/pages/NALSACheckerPage";
+import UndertrialTrackerPage from "@/pages/UndertrialTrackerPage";
+import VakilSahayakPage from "@/pages/VakilSahayakPage";
 import NotFound from "@/pages/not-found";
 
 export default function App() {
@@ -25,6 +29,10 @@ export default function App() {
                 <Route path="/chat/:sessionId" component={ChatPage} />
                 <Route path="/login" component={LoginPage} />
                 <Route path="/register" component={RegisterPage} />
+                <Route path="/documents" component={DocumentGeneratorPage} />
+                <Route path="/nalsa-check" component={NALSACheckerPage} />
+                <Route path="/undertrial-tracker" component={UndertrialTrackerPage} />
+                <Route path="/vakil-sahayak" component={VakilSahayakPage} />
                 <Route component={NotFound} />
               </Switch>
             </Router>

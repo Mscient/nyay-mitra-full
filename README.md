@@ -1,70 +1,93 @@
-# Nyay Mitra (न्याय मित्र) — AI Legal Aid Chatbot
+# Nyay Mitra — AI Legal Aid for Every Indian
+> *न्याय आपकी भाषा में — हर नागरिक के लिए*
 
-A full-stack AI-powered legal aid assistant for Indian citizens. Available in English, Hindi, and Marathi.
+India's most comprehensive AI legal platform — serving rural citizens while empowering lawyers with intelligent tools.
 
-## Tech Stack
-- **Backend:** Node.js + Express + SQLite (better-sqlite3 + Drizzle ORM)
-- **Frontend:** React + Vite + Tailwind CSS + shadcn/ui
-- **Auth:** JWT (jsonwebtoken + bcryptjs)
-- **AI:** OpenAI GPT-4o-mini (optional — falls back to demo responses)
+---
 
-## Quick Start
+## System Architecture
 
-### 1. Install dependencies
+### Backend (Node.js / Express / TypeScript)
+- **`server/routes.ts`** — Core API layer: AI chat completions, legal case matching engine (ported from Python), session management, JWT auth
+- **`server/db.ts`** — SQLite database via Drizzle ORM: users, sessions, messages, legal_cases, legal_laws, legal_sections, legal_principles (10 SC cases, 5 laws, 10+ sections seeded)
+- **`server/index.ts`** — Express server with Vite SSR middleware in dev mode
+
+### AI Engine
+- **Sarvam AI (`sarvam-30b`)** — Primary model powering all legal Q&A, context-aware responses in English, Hindi & Marathi
+- **Issue Classifier** — 10-category rule-based classifier (MVA_INJURY, FAMILY_DIVORCE, CRIME_THEFT, LABOUR_DISPUTE, RTI_VIOLATION, etc.) runs before every AI call
+- **Case Matching Engine** — Scores and ranks Supreme Court / High Court precedents by relevance to the user query
+
+### Frontend (React / Vite / TailwindCSS)
+- **`ChatPage.tsx`** — AI Legal Chat with CaseCard + LawCard components, multilingual input, session history
+- **`DocumentGeneratorPage.tsx`** — Auto-drafts legal notices, RTI applications, bail petitions
+- **`NALSACheckerPage.tsx`** — Eligibility quiz for government-funded free legal aid
+- **`UndertrialTrackerPage.tsx`** — §436A bail eligibility tracker for undertrial prisoners
+- **`VakilSahayakPage.tsx`** — Lawyer portal: live case research, client management, cause list
+- **`LandingPage.tsx`** — Bilingual hero (English + हिंदी), feature grid, dual CTA
+
+### Database (SQLite + Drizzle ORM)
+- `legal_cases` — 10 real Supreme Court / High Court cases with parties, year, court, judgment, outcome, legal principles
+- `legal_laws` — IPC, CrPC, MVA, DV Act, NALSA Act with full-text and status
+- `legal_sections` — 10+ key sections with plain-language explanations and penalties
+- `legal_principles` — 10 foundational Indian legal principles with source cases
+
+---
+
+## Key Features
+
+- 🤖 **AI Legal Chat** — Ask any legal question in plain language, get step-by-step guidance with cited laws and real case precedents
+- 📄 **Document Generator** — Instant legal notices, RTI applications, consumer complaints, bail applications
+- ⚖️ **NALSA Eligibility** — Checks if you qualify for completely free government legal aid
+- 🔍 **Undertrial Tracker** — §436A default bail eligibility calculator for prisoners' families
+- 👨‍⚖️ **Vakil Sahayak** — AI-powered case research + client management portal for lawyers
+- 🌐 **Multilingual** — English, हिंदी, मराठी with language-aware AI responses
+- 🌙 **Dark Mode** — Full dark/light theme toggle
+
+---
+
+## Built With
+
+| Layer | Technology |
+|---|---|
+| Frontend | React, Vite, TailwindCSS, TypeScript |
+| Backend | Node.js, Express, TypeScript |
+| Database | SQLite, Drizzle ORM, better-sqlite3 |
+| AI Model | Sarvam AI (`sarvam-30b`) |
+| Auth | JWT, bcryptjs |
+| Dev Tooling | tsx, Vite HMR |
+
+---
+
+## Getting Started
+
 ```bash
+# Install dependencies
 npm install
-```
 
-### 2. Set environment variables (optional)
-Create a `.env` file in the root:
-```
-OPENAI_API_KEY=sk-your-key-here
-JWT_SECRET=your-secret-key-here
-PORT=5000
-```
-Without `OPENAI_API_KEY`, the app uses built-in demo responses covering all major Indian legal topics.
+# Set up environment
+cp .env.example .env
+# Add your SARVAM_API_KEY to .env
 
-### 3. Run in development
-```bash
+# Start development server (served on port 5000)
 npm run dev
 ```
-Open http://localhost:5000
 
-### 4. Build for production
-```bash
-npm run build
-NODE_ENV=production node dist/index.cjs
-```
+The app is served at `http://localhost:5000` — both the API and frontend on the same port.
 
-## Features
-- **User accounts** — register/login with JWT auth, bcrypt hashed passwords
-- **3 languages** — English, Hindi (हिंदी), Marathi (मराठी)
-- **9 legal categories** — Criminal, Family, Labour, Consumer, Property, RTI, Constitutional, Women's Rights, General
-- **Real AI responses** — GPT-4o-mini with Indian law system prompt
-- **Session history** — all consultations saved to SQLite
-- **Dark/light mode** — system preference + manual toggle
-- **Mobile-first** — responsive sidebar, touch-friendly
+---
 
-## API Endpoints
-- `POST /api/auth/register` — create account
-- `POST /api/auth/login` — get JWT token
-- `GET /api/auth/me` — get current user (auth required)
-- `PATCH /api/auth/language` — update preferred language
-- `GET /api/sessions` — list sessions
-- `POST /api/sessions` — create session
-- `POST /api/sessions/:id/chat` — send message, get AI response
-- `GET /api/health` — health check
+## API Reference
 
-## Database
-SQLite database auto-created at `data/nyay-mitra.db` on first run.
-Tables: users, sessions, messages, bookmarks
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/health` | GET | Server health + AI connection status |
+| `/api/sessions` | GET/POST | Chat session management |
+| `/api/sessions/:id/chat` | POST | Send message, get AI response |
+| `/api/legal/chat` | POST | Legal Q&A with case + law matching |
+| `/api/legal/search/cases` | GET | Full-text case search |
+| `/api/legal/search/laws` | GET | Full-text law/section search |
+| `/api/legal/cases/:id` | GET | Case detail by ID |
 
-## Emergency Helplines (built into responses)
-- Emergency: 112
-- Women Helpline: 181
-- NALSA Legal Aid: 15100
-- Consumer Helpline: 1800-11-4000
-- Child Helpline: 1098
+---
 
-## Built with
-Perplexity Computer — https://www.perplexity.ai/computer
+*Nyay Mitra provides general legal information. Always consult a qualified lawyer for your specific situation.*

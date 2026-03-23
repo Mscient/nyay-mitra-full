@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import db from "./db";
+import { db, sqlite } from "./db";
 import { desc } from "drizzle-orm";
 import {
   insertSessionSchema, insertMessageSchema, insertBookmarkSchema,
@@ -16,7 +16,7 @@ import OpenAI from "openai";
 
 const JWT_SECRET = process.env.JWT_SECRET || "nyay-mitra-jwt-secret-change-in-production";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const sarvam = process.env.SARVAM_API_KEY ? new OpenAI({ apiKey: process.env.SARVAM_API_KEY, baseURL: "https://api.sarvam.ai/v1" }) : null;
 
 // Helper to strip sensitive fields from user object
 function toPublicUser(user: any) {
@@ -355,33 +355,63 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     });
 
     let aiContent = "";
-    let citations: string[] = [];
+    let citationsObj: any = { inline: [], cases: [], laws: [] };
 
-    // Determine which OpenAI client to use: user's BYOK key > server key > demo
-    let activeOpenAI = openai;
+    // Run legal classification on user message
+    const { type: issueType, confidence } = classifyIssue(message);
+
+    // Fetch related cases
+    const caseQ = `%${message.toLowerCase().split(" ").slice(0, 3).join("%")}%`;
+    let relatedCases: any[] = sqlite
+      .prepare(`SELECT * FROM legal_cases WHERE lower(issue_categories) LIKE ? ORDER BY precedent_value DESC, year_decided DESC LIMIT 2`)
+      .all(`%${issueType.toLowerCase()}%`);
+    if (relatedCases.length === 0) {
+      relatedCases = sqlite
+        .prepare(`SELECT * FROM legal_cases WHERE lower(summary) LIKE ? OR lower(case_title) LIKE ? LIMIT 2`)
+        .all(caseQ, caseQ);
+    }
+    citationsObj.cases = relatedCases;
+
+    // Fetch relevant laws
+    const lawKeywords: Record<string, string[]> = {
+      MVA_INJURY: ["MVA","CrPC"], CRIME_THEFT: ["IPC"], CRIME_FRAUD: ["IPC"],
+      FAMILY_DIVORCE: ["IPC"], FAMILY_VIOLENCE: ["IPC"], LABOR_HARASSMENT: ["IPC"],
+      CIVIL_CONTRACT: ["ICA"], LAND_ACQUISITION: ["LARR Act"],
+      CONSUMER_COMPLAINT: ["IPC"], CONST_RIGHTS: ["CrPC"],
+    };
+    const targetLaws = (lawKeywords[issueType] || ["IPC","CrPC"]).map((l) => `'${l}'`).join(",");
+    const relevantLaws: any[] = sqlite
+      .prepare(`SELECT ls.*, ll.law_name FROM legal_sections ls
+        JOIN legal_laws ll ON ls.law_shortname = ll.law_shortname
+        WHERE ls.law_shortname IN (${targetLaws}) LIMIT 2`)
+      .all();
+    citationsObj.laws = relevantLaws;
+
+    // Determine which Sarvam client to use: user's BYOK key > server key > demo
+    let activeSarvam = sarvam;
     if (req.userId) {
       const currentUser = storage.getUserById(req.userId);
       if (currentUser?.openaiApiKey) {
-        activeOpenAI = new OpenAI({ apiKey: currentUser.openaiApiKey });
+        activeSarvam = new OpenAI({ apiKey: currentUser.openaiApiKey, baseURL: "https://api.sarvam.ai/v1" });
       }
     }
 
-    if (activeOpenAI) {
+    if (activeSarvam) {
       try {
         const history = storage.listMessages(req.params.id).slice(-10);
         const systemPrompt = LEGAL_SYSTEM_PROMPT[language as keyof typeof LEGAL_SYSTEM_PROMPT] || LEGAL_SYSTEM_PROMPT.en;
         const categoryContext = CATEGORY_PROMPTS[session.category] || CATEGORY_PROMPTS.general;
+        const autoContext = `The user query was classified as ${issueType}. Mention the following cases if relevant: ${relatedCases.map(c=>c.case_title).join(", ")}. Mention following laws if relevant: ${relevantLaws.map(l=>l.law_name + " Sec " + l.section_number).join(", ")}.`;
 
-        const completion = await activeOpenAI.chat.completions.create({
-          model: "gpt-4o-mini",
+        const completion = await activeSarvam.chat.completions.create({
+          model: "sarvam-30b", // Fallback to sarvam-30b
           temperature: 0.3,
           messages: [
-            { role: "system", content: systemPrompt + "\n\nCategory context: " + categoryContext },
             ...history.slice(0, -1).map((m) => ({
               role: m.role as "user" | "assistant",
               content: m.content,
             })),
-            { role: "user", content: message },
+            { role: "user", content: `[SYSTEM CONTEXT]\n${systemPrompt}\n\nCategory context: ${categoryContext}\n\n${autoContext}\n\n[USER MESSAGE]\n${message}` },
           ],
         });
 
@@ -390,7 +420,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         // Extract citations from [LAW: ...] tags
         const citationMatches = aiContent.match(/\[LAW:\s*([^\]]+)\]/g);
         if (citationMatches) {
-          citations = citationMatches.map((c) => c.replace(/\[LAW:\s*|\]/g, "").trim());
+          citationsObj.inline = citationMatches.map((c) => c.replace(/\[LAW:\s*|\]/g, "").trim());
         }
       } catch (err: any) {
         console.error("[OpenAI Error]", err.message);
@@ -412,7 +442,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       role: "assistant",
       content: aiContent,
       language,
-      citations: citations.length > 0 ? JSON.stringify(citations) : null,
+      citations: JSON.stringify(citationsObj),
     });
 
     res.json({ userMessage: userMsg, assistantMessage: assistantMsg });
@@ -493,14 +523,150 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json(allMsgs);
   });
 
+  // ── Legal Knowledge Base Routes ────────────────────────────────
+
+  // Issue classifier (TypeScript port of case_matching_engine.py)
+  const ISSUE_KEYWORDS: Record<string, string[]> = {
+    MVA_INJURY:        ["accident","car","vehicle","bike","truck","road","crash","collision","motor","rash driving","hit","run","insurance claim","injury","mva"],
+    CRIME_THEFT:       ["theft","stolen","steal","burglary","robbery","pickpocket","dacoity","chori","ipc 380","ipc 379"],
+    FAMILY_DIVORCE:    ["divorce","separation","maintenance","alimony","custody","matrimonial","husband","wife","spouse","child custody","talaq","marriage"],
+    CRIME_FRAUD:       ["fraud","cheat","cheating","deceive","forgery","misrepresentation","ipc 420","financial fraud","scam","ponzi"],
+    CIVIL_CONTRACT:    ["contract","breach","agreement","deal","promise","damages","specific performance","business dispute","commercial"],
+    LABOR_HARASSMENT:  ["workplace","harassment","sexual harassment","vishaka","posh","employment","office","employee","boss","job termination","resign"],
+    FAMILY_VIOLENCE:   ["domestic violence","wife beating","dowry","cruelty","ipc 498a","498a","husband violence","dv act","protection order"],
+    LAND_ACQUISITION:  ["land","property","farm","agriculture","plot","acquisition","compensation","survey","registration","eviction","rent"],
+    CONSUMER_COMPLAINT:["consumer","product","defective","refund","warranty","ecommerce","online shopping","rera","builder","deficiency","service"],
+    CONST_RIGHTS:      ["fundamental rights","article 14","article 21","constitution","pil","writ","high court","equality","discrimination","ngo"],
+  };
+
+  function classifyIssue(query: string): { type: string; confidence: number } {
+    const q = query.toLowerCase();
+    let best = { type: "GENERAL", confidence: 0 };
+    for (const [type, keywords] of Object.entries(ISSUE_KEYWORDS)) {
+      const hits = keywords.filter((k) => q.includes(k)).length;
+      const confidence = Math.min(hits / 3, 1);
+      if (confidence > best.confidence) best = { type, confidence };
+    }
+    return best;
+  }
+
+  // GET /api/legal/search/cases?q=keyword&limit=5
+  app.get("/api/legal/search/cases", (req, res) => {
+    const q = `%${(req.query.q as string || "").toLowerCase()}%`;
+    const limit = Math.min(parseInt(req.query.limit as string || "5", 10), 20);
+    const rows = sqlite
+      .prepare(`SELECT * FROM legal_cases WHERE
+        lower(case_title) LIKE ? OR lower(summary) LIKE ? OR lower(case_type) LIKE ? OR lower(petitioner) LIKE ?
+        ORDER BY year_decided DESC LIMIT ?`)
+      .all(q, q, q, q, limit);
+    res.json(rows);
+  });
+
+  // GET /api/legal/search/laws?q=keyword&limit=5
+  app.get("/api/legal/search/laws", (req, res) => {
+    const q = `%${(req.query.q as string || "").toLowerCase()}%`;
+    const limit = Math.min(parseInt(req.query.limit as string || "5", 10), 20);
+    const rows = sqlite
+      .prepare(`SELECT ls.*, ll.law_name FROM legal_sections ls
+        JOIN legal_laws ll ON ls.law_shortname = ll.law_shortname
+        WHERE lower(ls.section_title) LIKE ? OR lower(ls.plain_language) LIKE ? OR lower(ls.law_shortname) LIKE ?
+        ORDER BY ls.law_shortname, CAST(ls.section_number AS INTEGER) LIMIT ?`)
+      .all(q, q, q, limit);
+    res.json(rows);
+  });
+
+  // GET /api/legal/cases/:id
+  app.get("/api/legal/cases/:id", (req, res) => {
+    const row = sqlite.prepare("SELECT * FROM legal_cases WHERE id = ? OR case_number = ?")
+      .get(req.params.id, req.params.id);
+    if (!row) return res.status(404).json({ error: "Case not found" });
+    res.json(row);
+  });
+
+  // GET /api/legal/laws/:code
+  app.get("/api/legal/laws/:code", (req, res) => {
+    const law = sqlite.prepare("SELECT * FROM legal_laws WHERE lower(law_shortname) = lower(?)")
+      .get(req.params.code);
+    if (!law) return res.status(404).json({ error: "Law not found" });
+    const sections = sqlite.prepare("SELECT * FROM legal_sections WHERE lower(law_shortname) = lower(?)")
+      .all(req.params.code);
+    res.json({ ...(law as object), sections });
+  });
+
+  // POST /api/legal/chat — classify → fetch matching DB records → optional AI
+  app.post("/api/legal/chat", async (req, res) => {
+    const body = req.body as { query?: string; userId?: string; language?: string };
+    const query = (body.query || "").trim();
+    if (!query) return res.status(400).json({ error: "query is required" });
+
+    const { type: issueType, confidence } = classifyIssue(query);
+
+    // Fetch up to 3 related cases
+    const caseQ = `%${query.toLowerCase().split(" ").slice(0, 3).join("%")}%`;
+    let relatedCases: any[] = sqlite
+      .prepare(`SELECT * FROM legal_cases WHERE lower(issue_categories) LIKE ? ORDER BY precedent_value DESC, year_decided DESC LIMIT 3`)
+      .all(`%${issueType.toLowerCase()}%`);
+
+    // Fallback: full-text search
+    if (relatedCases.length === 0) {
+      relatedCases = sqlite
+        .prepare(`SELECT * FROM legal_cases WHERE lower(summary) LIKE ? OR lower(case_title) LIKE ? LIMIT 3`)
+        .all(caseQ, caseQ);
+    }
+
+    // Fetch relevant law sections based on issue type
+    const lawKeywords: Record<string, string[]> = {
+      MVA_INJURY: ["MVA","CrPC"], CRIME_THEFT: ["IPC"], CRIME_FRAUD: ["IPC"],
+      FAMILY_DIVORCE: ["IPC"], FAMILY_VIOLENCE: ["IPC"], LABOR_HARASSMENT: ["IPC"],
+      CIVIL_CONTRACT: ["ICA"], LAND_ACQUISITION: ["LARR Act"],
+      CONSUMER_COMPLAINT: ["IPC"], CONST_RIGHTS: ["CrPC"],
+    };
+    const targetLaws = (lawKeywords[issueType] || ["IPC","CrPC"]).map((l) => `'${l}'`).join(",");
+    const relevantLaws: any[] = sqlite
+      .prepare(`SELECT ls.*, ll.law_name FROM legal_sections ls
+        JOIN legal_laws ll ON ls.law_shortname = ll.law_shortname
+        WHERE ls.law_shortname IN (${targetLaws}) LIMIT 4`)
+      .all();
+
+    // Determine AI client: user BYOK > server key > demo
+    let activeSarvam = sarvam;
+    if (body.userId) {
+      const u = storage.getUserById(body.userId);
+      if (u?.openaiApiKey) activeSarvam = new OpenAI({ apiKey: u.openaiApiKey, baseURL: "https://api.sarvam.ai/v1" });
+    }
+
+    let aiResponse = "";
+    if (activeSarvam) {
+      try {
+        const systemPrompt = `You are Nyay Mitra, an AI legal aid assistant for Indian citizens. The user's query has been classified as: ${issueType} (confidence: ${(confidence * 100).toFixed(0)}%). Provide concise, helpful legal information citing relevant Indian laws and cases. Always recommend consulting a qualified lawyer. Language: ${body.language || "en"}.`;
+        const completion = await activeSarvam.chat.completions.create({
+          model: "sarvam-30b",
+          temperature: 0.3,
+          messages: [
+            { role: "user", content: `[SYSTEM INSTRUCTIONS]\n${systemPrompt}\n\n[USER MESSAGE]\n${query}` },
+          ],
+          max_tokens: 600,
+        });
+        console.log("SARVAM COMPLETION:", JSON.stringify(completion));
+        aiResponse = completion.choices[0].message.content || "";
+      } catch (err: any) {
+        console.error("[Legal Chat AI Error]", err.message);
+      }
+    }
+
+    res.json({ issueType, confidence, relatedCases, relevantLaws, aiResponse });
+  });
+
   // ── Health check ───────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
+    const legalCaseCount = (sqlite.prepare("SELECT COUNT(*) as c FROM legal_cases").get() as any)?.c ?? 0;
     res.json({
       status: "ok",
       service: "Nyay Mitra API",
-      version: "2.0.0",
+      version: "2.1.0",
       timestamp: new Date().toISOString(),
-      ai: openai ? "openai-connected" : "demo-mode",
+      ai: sarvam ? "sarvam-connected" : "demo-mode",
+      legalDb: { cases: legalCaseCount },
     });
   });
 

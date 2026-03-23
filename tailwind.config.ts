@@ -6,12 +6,39 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        lg: ".5625rem", /* 9px */
-        md: ".375rem", /* 6px */
-        sm: ".1875rem", /* 3px */
+        xl:  "1.5rem",   /* 24px — radius-xl */
+        lg:  "1rem",     /* 16px — radius-lg */
+        md:  "0.625rem", /* 10px — radius    */
+        sm:  "0.375rem", /* 6px              */
       },
       colors: {
-        // Flat / base colors (regular buttons)
+        forest: {
+          DEFAULT: "#1A2E1A",
+          mid:     "#243824",
+          light:   "#2F4A2F",
+        },
+        gold: {
+          DEFAULT: "#C9920A",
+          bright:  "#E8A800",
+          pale:    "#F5E6B8",
+          whisper: "#FDF8EC",
+        },
+        cream: {
+          DEFAULT: "#F9F5EE",
+          dark:    "#EDE7D8",
+        },
+        ivory: "#FFFDF7",
+        ink: {
+          DEFAULT: "#1A1410",
+          mid:     "#3D3228",
+          muted:   "#7A6E61",
+          faint:   "#B5A99A",
+        },
+        rust: {
+          DEFAULT: "#A63A1E",
+          light:   "#FAEAE5",
+        },
+        // Tailwind bridge colors
         background: "hsl(var(--background) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",
         border: "hsl(var(--border) / <alpha-value>)",
@@ -52,16 +79,9 @@ export default {
           border: "var(--destructive-border)",
         },
         ring: "hsl(var(--ring) / <alpha-value>)",
-        chart: {
-          "1": "hsl(var(--chart-1) / <alpha-value>)",
-          "2": "hsl(var(--chart-2) / <alpha-value>)",
-          "3": "hsl(var(--chart-3) / <alpha-value>)",
-          "4": "hsl(var(--chart-4) / <alpha-value>)",
-          "5": "hsl(var(--chart-5) / <alpha-value>)",
-        },
         sidebar: {
           ring: "hsl(var(--sidebar-ring) / <alpha-value>)",
-          DEFAULT: "hsl(var(--sidebar) / <alpha-value>)",
+          DEFAULT: "hsl(var(--sidebar-background) / <alpha-value>)",
           foreground: "hsl(var(--sidebar-foreground) / <alpha-value>)",
           border: "hsl(var(--sidebar-border) / <alpha-value>)",
         },
@@ -73,20 +93,14 @@ export default {
         "sidebar-accent": {
           DEFAULT: "hsl(var(--sidebar-accent) / <alpha-value>)",
           foreground: "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
-          border: "var(--sidebar-accent-border)"
-        },
-        status: {
-          online: "rgb(34 197 94)",
-          away: "rgb(245 158 11)",
-          busy: "rgb(239 68 68)",
-          offline: "rgb(156 163 175)",
+          border: "var(--sidebar-accent-border)",
         },
       },
       fontFamily: {
-        sans: ["Inter", "var(--font-sans)", "system-ui", "sans-serif"],
-        serif: ["Playfair Display", "var(--font-serif)", "Georgia", "serif"],
-        mono: ["JetBrains Mono", "var(--font-mono)", "monospace"],
-        display: ["Playfair Display", "Georgia", "serif"],
+        sans:      ["Instrument Sans", "system-ui", "sans-serif"],
+        serif:     ["Cormorant Garamond", "Georgia", "serif"],
+        devanagari:["Noto Sans Devanagari", "Instrument Sans", "sans-serif"],
+        display:   ["Cormorant Garamond", "Georgia", "serif"],
       },
       keyframes: {
         "accordion-down": {

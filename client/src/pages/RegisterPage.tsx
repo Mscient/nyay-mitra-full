@@ -3,17 +3,11 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage, LANGUAGES, type Language } from "@/contexts/LanguageContext";
 import { useTheme } from "@/components/ThemeProvider";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Scale, Moon, Sun, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Moon, Sun } from "lucide-react";
 
 declare global {
-  interface Window {
-    google?: any;
-  }
+  interface Window { google?: any; }
 }
 
 const GOOGLE_CLIENT_ID = "450969618266-iom7rkqvkfh1teb4p3tlupsq1hlgh041.apps.googleusercontent.com";
@@ -41,7 +35,7 @@ export default function RegisterPage() {
           callback: handleGoogleResponse,
         });
         window.google.accounts.id.renderButton(googleBtnRef.current, {
-          theme: theme === "dark" ? "filled_black" : "outline",
+          theme: "outline",
           size: "large",
           width: "100%",
           text: "signup_with",
@@ -51,7 +45,7 @@ export default function RegisterPage() {
     };
     const timer = setTimeout(initGoogle, 500);
     return () => clearTimeout(timer);
-  }, [theme]);
+  }, []);
 
   async function handleGoogleResponse(response: any) {
     setIsLoading(true);
@@ -59,7 +53,7 @@ export default function RegisterPage() {
       await loginWithGoogle(response.credential);
       navigate("/chat");
     } catch (err: any) {
-      toast({ title: "Google signup failed", description: err.message, variant: "destructive" });
+      toast({ title: "Google sign-up failed", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -68,7 +62,7 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password.length < 6) {
-      toast({ title: "Password too short", description: "Password must be at least 6 characters", variant: "destructive" });
+      toast({ title: "Password too short", description: "Minimum 6 characters required", variant: "destructive" });
       return;
     }
     setIsLoading(true);
@@ -83,142 +77,137 @@ export default function RegisterPage() {
     }
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "11px 14px",
+    border: "1px solid var(--border-color)", borderRadius: 8,
+    fontFamily: "'Instrument Sans', sans-serif", fontSize: 14,
+    background: "var(--cream)", color: "var(--ink)", outline: "none",
+    transition: "border-color 0.2s"
+  };
+  const labelStyle: React.CSSProperties = {
+    display: "block", fontSize: 10, fontWeight: 600,
+    letterSpacing: 1.5, textTransform: "uppercase",
+    color: "var(--ink-muted)", marginBottom: 6
+  };
+
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 justice-bg">
-      <div className="relative z-10 w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link href="/">
-            <div className="inline-flex items-center gap-3 cursor-pointer">
-              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center shadow-lg">
-                <Scale className="w-6 h-6 text-primary-foreground" />
-              </div>
-              <div className="text-left">
-                <div className="font-display text-2xl font-bold text-primary dark:text-primary">{t("appName")}</div>
-                <div className="text-xs text-muted-foreground">{t("tagline")}</div>
-              </div>
-            </div>
-          </Link>
+    <div className="justice-bg" style={{ minHeight: "100vh", background: "var(--cream)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, position: "relative" }}>
+      <button onClick={toggleTheme} style={{ position: "absolute", top: 20, right: 20, padding: 8, border: "none", background: "transparent", cursor: "pointer", color: "var(--ink-muted)" }}>
+        {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+      </button>
+
+      {/* Logo */}
+      <div style={{ marginBottom: 32, textAlign: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 4 }}>
+          <div style={{ width: 36, height: 36, background: "var(--forest)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+            <div style={{ width: 16, height: 16, border: "2px solid var(--gold)", borderRadius: "50%", position: "absolute" }} />
+          </div>
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 26, fontWeight: 600, color: "var(--forest)" }}>Nyay Mitra</div>
+        </div>
+        <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "var(--ink-muted)" }}>Your AI Legal Aid Assistant</div>
+      </div>
+
+      {/* Card */}
+      <div style={{
+        background: "var(--ivory)", borderRadius: "var(--radius-xl)",
+        border: "1px solid var(--border-color)", boxShadow: "var(--shadow-lg)",
+        padding: "40px 44px", width: "100%", maxWidth: 480
+      }}>
+        <div style={{ marginBottom: 28 }}>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: "var(--ink)", lineHeight: 1.1, marginBottom: 4 }}>Create Account</h1>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>Get free legal guidance in your language</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-card border border-border rounded-xl shadow-xl p-8">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="font-display text-2xl font-bold text-foreground">{t("registerTitle")}</h1>
-              <p className="text-sm text-muted-foreground mt-1">{t("registerSubtitle")}</p>
-            </div>
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
-            >
-              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+        {/* Google Sign-Up */}
+        <div ref={googleBtnRef} style={{ marginBottom: 20, width: "100%" }} />
+
+        {/* Divider */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+          <div style={{ flex: 1, height: 1, background: "var(--border-color)" }} />
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--ink-faint)" }}>or register with email</span>
+          <div style={{ flex: 1, height: 1, background: "var(--border-color)" }} />
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={labelStyle}>Full Name</label>
+            <input
+              type="text" required value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Prashant Bhosale"
+              data-testid="input-name"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = "var(--gold)")}
+              onBlur={e => (e.target.style.borderColor = "var(--border-color)")}
+            />
           </div>
 
-          {/* Google Sign-Up Button */}
-          <div ref={googleBtnRef} className="w-full mb-4 flex justify-center [&>div]:!w-full" />
+          <div>
+            <label style={labelStyle}>Email Address</label>
+            <input
+              type="email" required value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              data-testid="input-email"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = "var(--gold)")}
+              onBlur={e => (e.target.style.borderColor = "var(--border-color)")}
+            />
+          </div>
 
-          <div className="relative mb-4">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">or register with email</span>
+          <div>
+            <label style={labelStyle}>Password</label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"} required value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Min. 6 characters"
+                data-testid="input-password"
+                style={{ ...inputStyle, paddingRight: 42 }}
+                onFocus={e => (e.target.style.borderColor = "var(--gold)")}
+                onBlur={e => (e.target.style.borderColor = "var(--border-color)")}
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}>
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="name">{t("name")}</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Prashant Bhosale"
-                required
-                data-testid="input-name"
-                className="bg-background"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="email">{t("email")}</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                data-testid="input-email"
-                className="bg-background"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="password">{t("password")}</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min. 6 characters"
-                  required
-                  data-testid="input-password"
-                  className="bg-background pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>{t("language")}</Label>
-              <Select value={lang} onValueChange={(v) => setLang(v as Language)}>
-                <SelectTrigger className="bg-background" data-testid="select-language">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.entries(LANGUAGES) as [Language, typeof LANGUAGES[Language]][]).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>
-                      <span className="mr-2">{val.flag}</span> {val.nativeLabel}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
-              disabled={isLoading}
-              data-testid="button-register"
+          <div>
+            <label style={labelStyle}>Preferred Language</label>
+            <select
+              value={lang}
+              onChange={e => setLang(e.target.value as Language)}
+              style={{ ...inputStyle, cursor: "pointer" }}
             >
-              {isLoading ? "Creating account…" : t("register")}
-            </Button>
-          </form>
+              {(Object.entries(LANGUAGES) as [Language, { nativeLabel: string }][]).map(([code, info]) => (
+                <option key={code} value={code}>{info.nativeLabel}</option>
+              ))}
+            </select>
+          </div>
 
-          <div className="mt-4 text-center">
-            <span className="text-sm text-muted-foreground">{t("alreadyHaveAccount")} </span>
+          <button type="submit" disabled={isLoading} data-testid="button-register" style={{
+            padding: "13px", background: "var(--forest)", color: "var(--gold-pale)",
+            border: "none", borderRadius: 10, fontFamily: "'Instrument Sans', sans-serif",
+            fontSize: 15, fontWeight: 600, cursor: isLoading ? "not-allowed" : "pointer",
+            opacity: isLoading ? 0.7 : 1, transition: "all 0.2s", marginTop: 4
+          }}>
+            {isLoading ? "Creating account…" : "Register"}
+          </button>
+        </form>
+
+        <div style={{ textAlign: "center", marginTop: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+            Already have an account?{" "}
             <Link href="/login">
-              <span className="text-sm font-medium text-primary hover:underline cursor-pointer">{t("login")}</span>
+              <span style={{ fontWeight: 700, color: "var(--ink)", cursor: "pointer" }}>Login</span>
             </Link>
-          </div>
-
-          <div className="mt-3 text-center">
-            <Link href="/chat">
-              <span className="text-sm text-muted-foreground hover:text-foreground cursor-pointer underline-offset-2 hover:underline">
-                {t("continueAsGuest")}
-              </span>
-            </Link>
-          </div>
+          </p>
+          <p>
+            <button onClick={() => navigate("/chat")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-muted)", fontSize: 13 }}>
+              Continue as Guest
+            </button>
+          </p>
         </div>
       </div>
     </div>
