@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { Search, Calculator, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 
 // Section 436A CrPC: Undertrial who has served half the maximum sentence gets bail
 // Maximum sentences by major IPC sections
@@ -30,6 +31,9 @@ function addDays(date: Date, days: number): Date {
 }
 
 export default function UndertrialTrackerPage() {
+  const [activeTab, setActiveTab] = useState<"calculator" | "tracker">("calculator");
+
+  // Calculator State
   const [form, setForm] = useState({
     name: "",
     section: "",
@@ -42,6 +46,12 @@ export default function UndertrialTrackerPage() {
     nextHearing: "",
   });
   const [result, setResult] = useState<any>(null);
+
+  // Tracker State
+  const [cnr, setCnr] = useState("");
+  const [isFetchingTracker, setIsFetchingTracker] = useState(false);
+  const [trackerData, setTrackerData] = useState<any>(null);
+  const [trackerError, setTrackerError] = useState<string | null>(null);
 
   const selectedSection = SECTION_DATA.find(s => s.section === form.section);
 
@@ -84,6 +94,30 @@ export default function UndertrialTrackerPage() {
     });
   }
 
+  async function fetchCaseStatus() {
+    if (!cnr || cnr.length < 10) {
+      setTrackerError("Please enter a valid CNR number (e.g. MHAU010002132023)");
+      return;
+    }
+    setIsFetchingTracker(true);
+    setTrackerError(null);
+    setTrackerData(null);
+    try {
+      const res = await fetch(`/api/legal/ecourts/cnr/${cnr}`);
+      if (res.ok) {
+        const json = await res.json();
+        setTrackerData(json.data);
+      } else {
+        const err = await res.json();
+        setTrackerError(err.error || "Failed to fetch case status.");
+      }
+    } catch (err) {
+      setTrackerError("Network error. Could not connect to courts database.");
+    } finally {
+      setIsFetchingTracker(false);
+    }
+  }
+
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "10px 14px",
     border: "1px solid var(--border-color)", borderRadius: 8,
@@ -104,14 +138,25 @@ export default function UndertrialTrackerPage() {
       </nav>
 
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "80px 24px 60px" }}>
-        <div style={{ marginBottom: 36 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>Section 436A CrPC</div>
-          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 40, fontWeight: 500, color: "var(--ink)", lineHeight: 1.1 }}>Undertrial Bail Eligibility Calculator</h1>
-          <p style={{ fontSize: 14, color: "var(--ink-muted)", marginTop: 10, lineHeight: 1.65, maxWidth: 600 }}>
-            Under Section 436A CrPC, an undertrial who has completed <strong>half the maximum sentence</strong> for the offence charged is entitled to bail — as <em>held</em> in <span style={{ color: "var(--gold)" }}>SC in Re: Inhuman Conditions in 1382 Prisons (2016)</span>.
-          </p>
+        <div style={{ marginBottom: 36, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>Justice & Rights</div>
+            <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 40, fontWeight: 500, color: "var(--ink)", lineHeight: 1.1 }}>Undertrial Case Hub</h1>
+            <p style={{ fontSize: 14, color: "var(--ink-muted)", marginTop: 10, lineHeight: 1.65, maxWidth: 600 }}>
+              Track live district court case statuses or calculate statutory bail eligibility under Section 436A of the CrPC.
+            </p>
+          </div>
+          <div style={{ display: "flex", background: "rgba(201,146,10,0.1)", borderRadius: 12, padding: 4 }}>
+            <button onClick={() => setActiveTab("tracker")} style={{ border: "none", background: activeTab === "tracker" ? "var(--ivory)" : "transparent", color: activeTab === "tracker" ? "var(--forest)" : "var(--ink-muted)", boxShadow: activeTab === "tracker" ? "var(--shadow-sm)" : "none", padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              <Search size={14} /> Live Tracking
+            </button>
+            <button onClick={() => setActiveTab("calculator")} style={{ border: "none", background: activeTab === "calculator" ? "var(--ivory)" : "transparent", color: activeTab === "calculator" ? "var(--forest)" : "var(--ink-muted)", boxShadow: activeTab === "calculator" ? "var(--shadow-sm)" : "none", padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              <Calculator size={14} /> Bail Calculator
+            </button>
+          </div>
         </div>
 
+        {activeTab === "calculator" ? (
         <div style={{ display: "grid", gridTemplateColumns: result ? "1fr 1fr" : "1fr", gap: 24 }}>
           {/* Form */}
           <div style={{ background: "var(--ivory)", border: "1px solid var(--border-color)", borderRadius: 20, padding: 32 }}>
@@ -259,6 +304,105 @@ export default function UndertrialTrackerPage() {
             </div>
           )}
         </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {/* Tracker Input */}
+            <div style={{ background: "var(--ivory)", border: "1px solid var(--border-color)", borderRadius: 20, padding: 32 }}>
+              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, color: "var(--ink)", marginBottom: 8 }}>Track Court Case via CNR</div>
+              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 20 }}>Enter your 16-digit Case Number Record (CNR) to fetch live status from eCourts.</p>
+              
+              <div style={{ display: "flex", gap: 12 }}>
+                <input 
+                  type="text" 
+                  value={cnr} 
+                  onChange={e => setCnr(e.target.value.toUpperCase())} 
+                  placeholder="e.g., MHAU010002132023" 
+                  style={{ ...inputStyle, flex: 1, textTransform: "uppercase", letterSpacing: 1 }}
+                  onFocus={e => (e.target.style.borderColor = "var(--gold)")} onBlur={e => (e.target.style.borderColor = "var(--border-color)")}
+                />
+                <button 
+                  onClick={fetchCaseStatus}
+                  disabled={isFetchingTracker || !cnr.trim()}
+                  style={{ padding: "12px 24px", background: "var(--forest)", color: "var(--gold-pale)", border: "none", borderRadius: 8, fontWeight: 600, cursor: isFetchingTracker ? "default" : "pointer", opacity: isFetchingTracker ? 0.7 : 1 }}
+                >
+                  {isFetchingTracker ? "Fetching..." : "Track Case"}
+                </button>
+              </div>
+              {trackerError && <div style={{ color: "var(--rust)", fontSize: 13, marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}><AlertCircle size={14}/> {trackerError}</div>}
+            </div>
+
+            {/* Tracker Results */}
+            {trackerData && (
+              <div style={{ background: "var(--ivory)", border: "1px solid var(--border-color)", borderRadius: 20, overflow: "hidden" }}>
+                <div style={{ background: "var(--forest)", padding: "24px 32px", color: "var(--ivory)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, color: "var(--gold-pale)", marginBottom: 8 }}>{trackerData.cnr_number}</div>
+                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500, marginBottom: 4 }}>{trackerData.case_title}</div>
+                    <div style={{ fontSize: 13, opacity: 0.8 }}>{trackerData.court_name} • {trackerData.case_type}</div>
+                  </div>
+                  <div style={{ background: "rgba(255,255,255,0.1)", padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+                    Status: {trackerData.status}
+                  </div>
+                </div>
+
+                <div style={{ padding: 32, display: "grid", gridTemplateColumns: "1fr 2fr", gap: 40 }}>
+                  
+                  {/* Metadata Sidebar */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div style={{ background: "var(--cream)", borderRadius: 12, padding: 16 }}>
+                      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "var(--ink-muted)", marginBottom: 4 }}>Presiding Judge</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{trackerData.judge}</div>
+                    </div>
+                    <div style={{ background: "var(--cream)", borderRadius: 12, padding: 16 }}>
+                      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "var(--ink-muted)", marginBottom: 4 }}>Next Hearing</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{new Date(trackerData.next_hearing_date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</div>
+                    </div>
+                    <div style={{ background: "var(--cream)", borderRadius: 12, padding: 16 }}>
+                      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "var(--ink-muted)", marginBottom: 4 }}>Petitioner</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{trackerData.petitioner}</div>
+                    </div>
+                    <div style={{ background: "var(--cream)", borderRadius: 12, padding: 16 }}>
+                      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "var(--ink-muted)", marginBottom: 4 }}>Respondent</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{trackerData.respondent}</div>
+                    </div>
+                  </div>
+
+                  {/* Visual Timeline */}
+                  <div>
+                    <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 600, color: "var(--ink)", marginBottom: 24, paddingBottom: 12, borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", gap: 8 }}>
+                      <Clock size={16} color="var(--gold)"/> Case History
+                    </h3>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 0, position: "relative" }}>
+                      {trackerData.history?.map((event: any, idx: number) => {
+                        const isLast = idx === trackerData.history.length - 1;
+                        return (
+                          <div key={idx} style={{ display: "flex", gap: 20, position: "relative" }}>
+                            {/* Line connecting nodes */}
+                            {!isLast && <div style={{ position: "absolute", left: 11, top: 24, bottom: -8, width: 2, background: "var(--gold-whisper)", zIndex: 0 }} />}
+                            
+                            {/* Dot */}
+                            <div style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--gold-pale)", border: "2px solid var(--gold)", zIndex: 1, marginTop: 2, flexShrink: 0 }} />
+                            
+                            {/* Content */}
+                            <div style={{ flex: 1, paddingBottom: 32 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--gold)", marginBottom: 2 }}>
+                                {new Date(event.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                              </div>
+                              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>{event.stage}</div>
+                              <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.5 }}>{event.remarks}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

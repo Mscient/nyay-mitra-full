@@ -14,6 +14,7 @@ import {
   ChevronDown, ChevronUp, Scale
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VoiceRecorder } from "@/components/VoiceRecorder";
 
 const CATEGORY_META: Record<string, { icon: any; label: Record<string, string>; emoji: string }> = {
   general:       { icon: MessageSquare, emoji: "⚖️", label: { en: "General",        hi: "सामान्य",       mr: "सामान्य" } },
@@ -653,10 +654,16 @@ export default function ChatPage() {
           borderTop: "1px solid var(--border-gold)", padding: "14px 20px",
           background: "rgba(255,253,247,0.95)", backdropFilter: "blur(12px)", flexShrink: 0
         }}>
-          <div style={{ maxWidth: 760, margin: "0 auto" }}>
-            <p style={{ fontSize: 11, color: "var(--ink-faint)", textAlign: "center", marginBottom: 10 }}>
+          <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12 }}>
+            <p style={{ fontSize: 11, color: "var(--ink-faint)", textAlign: "center", margin: 0 }}>
               {t("disclaimer")}
             </p>
+            
+            <VoiceRecorder 
+              onTranscriptionComplete={(text) => setInputValue(prev => prev ? `${prev} ${text}` : text)}
+              isDisabled={sendMessage.isPending}
+            />
+
             <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
               <textarea
                 ref={textareaRef}

@@ -8,6 +8,7 @@ const DOCUMENT_TYPES = [
     title: "RTI Application",
     subtitle: "Right to Information Act 2005",
     desc: "Request information from any government authority",
+    docInfo: "RTI (Right to Information) allows any Indian citizen to formally request records, documents, or data from government bodies. It is a fundamental tool for ensuring transparency and holding public authorities accountable.",
     fields: ["authority", "subject", "information_needed", "applicant_name", "applicant_address"],
   },
   {
@@ -16,6 +17,7 @@ const DOCUMENT_TYPES = [
     title: "Legal Notice",
     subtitle: "Demand / Cease & Desist",
     desc: "Send a formal legal notice before filing a case",
+    docInfo: "A Legal Notice is a formal, written communication to a person or entity informing them of your intention to undertake legal proceedings against them. It serves as the formal first step in civil litigation before approaching a court.",
     fields: ["notice_to", "notice_to_address", "your_name", "your_address", "claim_details", "demand", "timeline"],
   },
   {
@@ -24,6 +26,7 @@ const DOCUMENT_TYPES = [
     title: "Bail Application",
     subtitle: "Under Section 436 / 437 CrPC",
     desc: "Apply for regular or anticipatory bail",
+    docInfo: "A Bail Application is formally filed to seek the release of a person accused of a criminal offense. Establishing bail ensures the accused's constitutional right to liberty is protected while awaiting trial or judgment.",
     fields: ["accused_name", "fir_number", "police_station", "charges", "grounds_for_bail", "surety_name"],
   },
   {
@@ -32,6 +35,7 @@ const DOCUMENT_TYPES = [
     title: "Consumer Complaint",
     subtitle: "Consumer Protection Act 2019",
     desc: "File a complaint against a defective product or service",
+    docInfo: "A Consumer Complaint is a formal grievance filed under the Consumer Protection Act when a consumer experiences defective goods or deficient services resulting in financial loss or harassment from a seller.",
     fields: ["opposite_party", "opposite_party_address", "your_name", "your_address", "complaint_details", "relief_sought", "purchase_date"],
   },
   {
@@ -40,7 +44,26 @@ const DOCUMENT_TYPES = [
     title: "General Affidavit",
     subtitle: "Notarised sworn statement",
     desc: "Generate a standard affidavit template",
+    docInfo: "An Affidavit is a written, sworn statement of fact voluntarily made by an affiant or deponent under an oath administered by a person authorized to do so by law (like a Notary Public).",
     fields: ["deponent_name", "deponent_age", "deponent_address", "statement_of_facts"],
+  },
+  {
+    id: "founder_agreement",
+    icon: "🤝",
+    title: "Co-Founder Agreement",
+    subtitle: "Startup Incorporation",
+    desc: "Define roles, equity split, and vesting for founders",
+    docInfo: "A Co-Founder Agreement establishes the core legal framework for a startup's founding team. It outlines equity ownership splits, roles, responsibilities, and specific vesting schedules to legally prevent future internal disputes.",
+    fields: ["startup_name", "founder1_name", "founder1_equity", "founder2_name", "founder2_equity", "vesting_period", "cliff_period", "jurisdiction"],
+  },
+  {
+    id: "esop_policy",
+    icon: "📈",
+    title: "ESOP Policy",
+    subtitle: "Employee Stock Options",
+    desc: "Generate an Employee Stock Option Plan for your startup",
+    docInfo: "An Employee Stock Option Plan (ESOP) Policy legally allows employees to acquire ownership interest in the startup over time, aligning their financial incentives with the company's long-term macro success.",
+    fields: ["startup_name", "total_pool_size", "vesting_period", "cliff_period", "exercise_period", "board_approver"],
   },
 ];
 
@@ -72,6 +95,17 @@ const FIELD_LABELS: Record<string, string> = {
   deponent_age: "Age",
   deponent_address: "Permanent Address",
   statement_of_facts: "Statement of Facts",
+  startup_name: "Startup / Company Name",
+  founder1_name: "Founder 1 Name",
+  founder1_equity: "Founder 1 Equity (%)",
+  founder2_name: "Founder 2 Name",
+  founder2_equity: "Founder 2 Equity (%)",
+  vesting_period: "Vesting Period (e.g., 4 years)",
+  cliff_period: "Cliff Period (e.g., 1 year)",
+  jurisdiction: "Jurisdiction (City/State)",
+  total_pool_size: "Total ESOP Pool Size (%)",
+  exercise_period: "Exercise Period (e.g., 5 years)",
+  board_approver: "Board Approver (e.g., Board of Directors)",
 };
 
 function generateDocument(type: string, values: Record<string, string>): string {
@@ -236,6 +270,81 @@ ${values.deponent_name || "[Name]"}
 ---
 ⚖️ Drafted by Nyay Mitra — Must be notarised to be legally valid`;
 
+    case "founder_agreement":
+      return `CO-FOUNDER AGREEMENT
+
+This Co-Founder Agreement ("Agreement") is made and entered into on this ${date}, by and between:
+
+1. ${values.founder1_name || "[Founder 1 Name]"} ("Founder 1")
+2. ${values.founder2_name || "[Founder 2 Name]"} ("Founder 2")
+
+Collectively referred to as the "Founders" of ${values.startup_name || "[Startup Name]"} (the "Company").
+
+1. PURPOSE
+The Founders are collaborating to develop and launch the Company. This Agreement outlines the ownership rights, responsibilities, and equity vesting schedules to ensure the successful operation of the Company.
+
+2. EQUITY OWNERSHIP
+The Founders agree to apportion the equity in the Company as follows:
+- ${values.founder1_name || "[Founder 1 Name]"}: ${values.founder1_equity || "[%]"}%
+- ${values.founder2_name || "[Founder 2 Name]"}: ${values.founder2_equity || "[%]"}%
+
+3. VESTING SCHEDULE
+The equity shares issued to the Founders shall be subject to a vesting schedule of ${values.vesting_period || "[4 years]"} with a ${values.cliff_period || "[1 year]"} cliff. 
+- No shares shall vest until the completion of the cliff period.
+- After the cliff period, shares shall vest in equal monthly installments over the remaining vesting period.
+- If a Founder leaves the Company prior to full vesting, the unvested shares will be repurchased by the Company at a nominal value.
+
+4. ROLES AND RESPONSIBILITIES
+The Founders shall devote their full time, attention, and efforts to the Company. Any outside business activities require mutual written consent.
+
+5. INTELLECTUAL PROPERTY
+Any inventions, designs, code, or intellectual property created by the Founders for the Company shall be the exclusive property of the Company.
+
+6. GOVERNING LAW & DISPUTE RESOLUTION
+This Agreement shall be governed by the laws of India. Any disputes arising out of this Agreement shall be resolved via binding arbitration in ${values.jurisdiction || "[City/State]"}, subject to the exclusive jurisdiction of its courts.
+
+IN WITNESS WHEREOF, the Founders have executed this Agreement on the date first written above.
+
+___________________________            ___________________________
+${values.founder1_name || "[Founder 1 Name]"}                           ${values.founder2_name || "[Founder 2 Name]"}
+
+---
+⚖️ Drafted by Nyay Mitra — Startup templates must be reviewed by legal counsel.`;
+
+    case "esop_policy":
+      return `${values.startup_name ? values.startup_name.toUpperCase() : "[STARTUP NAME]"}
+EMPLOYEE STOCK OPTION PLAN (ESOP) POLICY
+
+1. PURPOSE
+This Employee Stock Option Plan ("Plan") is designed to attract, retain, and motivate highly qualified employees, directors, and consultants by providing them with the opportunity to acquire an equity interest in ${values.startup_name || "[Startup Name]"} (the "Company").
+
+2. POOL SIZE
+The maximum aggregate number of shares that may be issued under this Plan shall represent ${values.total_pool_size || "[%]"}% of the fully diluted share capital of the Company, subject to adjustment by the ${values.board_approver || "Board of Directors"}.
+
+3. ADMINISTRATION
+This Plan shall be administered by the ${values.board_approver || "Board of Directors"} or a Compensation Committee appointed by the Board (the "Administrator"). The Administrator has the exclusive power to select Grantees and determine the terms of each Option.
+
+4. VESTING SCHEDULE
+Unless otherwise specified in a specific Grant Letter, Options granted under this Plan shall be subject to a ${values.vesting_period || "[4-year]"} vesting schedule with a ${values.cliff_period || "[1-year]"} cliff.
+- 25% of the Options shall vest upon the 1-year anniversary of the Grant Date.
+- The remaining 75% shall vest in equal monthly installments over the subsequent months.
+
+5. EXERCISE OF OPTIONS
+Vested Options may be exercised by the Grantee upon the payment of the Exercise Price. Options must be exercised within the Exercise Period of ${values.exercise_period || "[5 years]"} from the vesting date. Upon termination of employment for cause, all unvested and unexercised Options shall immediately expire.
+
+6. LIQUIDITY EVENT / EXIT
+In the event of a Change in Control (merger, acquisition, or IPO), the Administrator may determine that unvested Options shall accelerate, or be substituted with equivalent options by the acquiring entity.
+
+This ESOP Policy has been adopted by the Company as of ${date}.
+
+By Order of the ${values.board_approver || "Board of Directors"},
+
+___________________________
+Authorized Signatory
+
+---
+⚖️ Drafted by Nyay Mitra — Compliant with Companies Act, 2013 broad framework. Get reviewed by a CS or lawyer before Board adoption.`;
+
     default:
       return "";
   }
@@ -314,6 +423,12 @@ export default function DocumentGeneratorPage() {
                 <div>
                   <div style={{ fontSize: 24 }}>{selectedType?.icon}</div>
                   <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500, color: "var(--ink)" }}>{selectedType?.title}</div>
+                  {/* Document Information Display */}
+                  {selectedType?.docInfo && (
+                    <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8, maxWidth: 620, lineHeight: 1.6 }}>
+                      {selectedType.docInfo}
+                    </div>
+                  )}
                 </div>
                 <button onClick={() => { setSelected(null); setGenerated(""); }} style={{ background: "var(--cream-dark)", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12, color: "var(--ink-muted)" }}>← Back</button>
               </div>
@@ -381,3 +496,4 @@ export default function DocumentGeneratorPage() {
     </div>
   );
 }
+

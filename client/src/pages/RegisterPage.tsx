@@ -4,7 +4,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage, LANGUAGES, type Language } from "@/contexts/LanguageContext";
 import { useTheme } from "@/components/ThemeProvider";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Moon, Sun } from "lucide-react";
+import { Eye, EyeOff, Moon, Sun, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 declare global {
   interface Window { google?: any; }
@@ -14,7 +17,7 @@ const GOOGLE_CLIENT_ID = "450969618266-iom7rkqvkfh1teb4p3tlupsq1hlgh041.apps.goo
 
 export default function RegisterPage() {
   const { register, loginWithGoogle } = useAuth();
-  const { t, setLanguage } = useLanguage();
+  const { setLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -23,9 +26,15 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [lang, setLang] = useState<Language>("en");
+  
+  const [errors, setErrors] = useState<{name?: string; email?: string; password?: string}>({});
+  const [touched, setTouched] = useState<{name?: boolean; email?: boolean; password?: boolean}>({});
+
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
+
+  const returnTo = new URLSearchParams(window.location.search).get("returnTo") || "/chat";
 
   useEffect(() => {
     const initGoogle = () => {
@@ -35,11 +44,7 @@ export default function RegisterPage() {
           callback: handleGoogleResponse,
         });
         window.google.accounts.id.renderButton(googleBtnRef.current, {
-          theme: "outline",
-          size: "large",
-          width: "100%",
-          text: "signup_with",
-          shape: "rectangular",
+          theme: "outline", size: "large", width: "100%", text: "signup_with", shape: "rectangular",
         });
       }
     };
@@ -51,7 +56,7 @@ export default function RegisterPage() {
     setIsLoading(true);
     try {
       await loginWithGoogle(response.credential);
-      navigate("/chat");
+      navigate(returnTo);
     } catch (err: any) {
       toast({ title: "Google sign-up failed", description: err.message, variant: "destructive" });
     } finally {
@@ -59,17 +64,36 @@ export default function RegisterPage() {
     }
   }
 
+  const validateField = (field: "name" | "email" | "password", value: string) => {
+    let error = undefined;
+    if (field === "name" && value.trim().length < 2) error = "Name must be at least 2 characters";
+    if (field === "email" && !/^\S+@\S+\.\S+$/.test(value)) error = "Enter a valid email address";
+    if (field === "password" && value.length < 6) error = "Password must be at least 6 characters";
+    
+    setErrors(prev => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
+  const handleBlur = (field: "name" | "email" | "password", value: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    validateField(field, value);
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 6) {
-      toast({ title: "Password too short", description: "Minimum 6 characters required", variant: "destructive" });
-      return;
-    }
+    setTouched({ name: true, email: true, password: true });
+    
+    const isNameValid = validateField("name", name);
+    const isEmailValid = validateField("email", email);
+    const isPasswordValid = validateField("password", password);
+    
+    if (!isNameValid || !isEmailValid || !isPasswordValid) return;
+
     setIsLoading(true);
     try {
       await register(name, email, password, lang);
       setLanguage(lang);
-      navigate("/chat");
+      navigate(returnTo);
     } catch (err: any) {
       toast({ title: "Registration failed", description: err.message, variant: "destructive" });
     } finally {
@@ -77,108 +101,107 @@ export default function RegisterPage() {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "11px 14px",
-    border: "1px solid var(--border-color)", borderRadius: 8,
-    fontFamily: "'Instrument Sans', sans-serif", fontSize: 14,
-    background: "var(--cream)", color: "var(--ink)", outline: "none",
-    transition: "border-color 0.2s"
-  };
-  const labelStyle: React.CSSProperties = {
-    display: "block", fontSize: 10, fontWeight: 600,
-    letterSpacing: 1.5, textTransform: "uppercase",
-    color: "var(--ink-muted)", marginBottom: 6
-  };
-
   return (
-    <div className="justice-bg" style={{ minHeight: "100vh", background: "var(--cream)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, position: "relative" }}>
-      <button onClick={toggleTheme} style={{ position: "absolute", top: 20, right: 20, padding: 8, border: "none", background: "transparent", cursor: "pointer", color: "var(--ink-muted)" }}>
-        {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-      </button>
+    <div className="justice-bg min-h-screen bg-background flex flex-col items-center justify-center p-6 relative">
+      <Button variant="ghost" size="icon" onClick={toggleTheme} className="absolute top-6 right-6 text-muted-foreground">
+        {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+      </Button>
 
       {/* Logo */}
-      <div style={{ marginBottom: 32, textAlign: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 4 }}>
-          <div style={{ width: 36, height: 36, background: "var(--forest)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-            <div style={{ width: 16, height: 16, border: "2px solid var(--gold)", borderRadius: "50%", position: "absolute" }} />
+      <div className="mb-8 text-center flex flex-col items-center">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center relative">
+            <div className="w-4 h-4 border-2 border-secondary rounded-full absolute" />
           </div>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 26, fontWeight: 600, color: "var(--forest)" }}>Nyay Mitra</div>
+          <h1 className="font-display text-3xl font-bold text-primary dark:text-primary-foreground">Nyay Mitra</h1>
         </div>
-        <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "var(--ink-muted)" }}>Your AI Legal Aid Assistant</div>
+        <p className="text-xs tracking-widest uppercase text-muted-foreground font-semibold">Your AI Legal Aid Assistant</p>
       </div>
 
       {/* Card */}
-      <div style={{
-        background: "var(--ivory)", borderRadius: "var(--radius-xl)",
-        border: "1px solid var(--border-color)", boxShadow: "var(--shadow-lg)",
-        padding: "40px 44px", width: "100%", maxWidth: 480
-      }}>
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: "var(--ink)", lineHeight: 1.1, marginBottom: 4 }}>Create Account</h1>
-          <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>Get free legal guidance in your language</p>
+      <div className="bg-card w-full max-w-md rounded-2xl border border-border shadow-lg p-8 sm:p-10 relative overflow-hidden">
+        <div className="mb-8">
+          <h2 className="font-display text-3xl font-semibold text-foreground leading-tight mb-2">Create Account</h2>
+          <p className="text-sm text-muted-foreground">Get free legal guidance in your language</p>
         </div>
 
         {/* Google Sign-Up */}
-        <div ref={googleBtnRef} style={{ marginBottom: 20, width: "100%" }} />
+        <div ref={googleBtnRef} className="mb-6 w-full" />
 
-        {/* Divider */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-          <div style={{ flex: 1, height: 1, background: "var(--border-color)" }} />
-          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--ink-faint)" }}>or register with email</span>
-          <div style={{ flex: 1, height: 1, background: "var(--border-color)" }} />
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground/70">or register with email</span>
+          <div className="flex-1 h-px bg-border" />
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <label style={labelStyle}>Full Name</label>
-            <input
-              type="text" required value={name}
-              onChange={e => setName(e.target.value)}
+        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          <div className="space-y-2">
+            <Label htmlFor="name" className={errors.name && touched.name ? "text-destructive" : ""}>Full Name</Label>
+            <Input
+              id="name" type="text" value={name}
+              onChange={e => { setName(e.target.value); if (touched.name) validateField("name", e.target.value); }}
+              onBlur={() => handleBlur("name", name)}
               placeholder="Prashant Bhosale"
-              data-testid="input-name"
-              style={inputStyle}
-              onFocus={e => (e.target.style.borderColor = "var(--gold)")}
-              onBlur={e => (e.target.style.borderColor = "var(--border-color)")}
+              aria-invalid={!!(errors.name && touched.name)}
+              className={errors.name && touched.name ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.name && touched.name && (
+              <p className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3 h-3" /> {errors.name}
+              </p>
+            )}
           </div>
 
-          <div>
-            <label style={labelStyle}>Email Address</label>
-            <input
-              type="email" required value={email}
-              onChange={e => setEmail(e.target.value)}
+          <div className="space-y-2">
+            <Label htmlFor="email" className={errors.email && touched.email ? "text-destructive" : ""}>Email Address</Label>
+            <Input
+              id="email" type="email" value={email}
+              onChange={e => { setEmail(e.target.value); if (touched.email) validateField("email", e.target.value); }}
+              onBlur={() => handleBlur("email", email)}
               placeholder="you@example.com"
-              data-testid="input-email"
-              style={inputStyle}
-              onFocus={e => (e.target.style.borderColor = "var(--gold)")}
-              onBlur={e => (e.target.style.borderColor = "var(--border-color)")}
+              aria-invalid={!!(errors.email && touched.email)}
+              className={errors.email && touched.email ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.email && touched.email && (
+              <p className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3 h-3" /> {errors.email}
+              </p>
+            )}
           </div>
 
-          <div>
-            <label style={labelStyle}>Password</label>
-            <div style={{ position: "relative" }}>
-              <input
-                type={showPassword ? "text" : "password"} required value={password}
-                onChange={e => setPassword(e.target.value)}
+          <div className="space-y-2">
+            <Label htmlFor="password" className={errors.password && touched.password ? "text-destructive" : ""}>Password</Label>
+            <div className="relative">
+              <Input
+                id="password" type={showPassword ? "text" : "password"} value={password}
+                onChange={e => { setPassword(e.target.value); if (touched.password) validateField("password", e.target.value); }}
+                onBlur={() => handleBlur("password", password)}
                 placeholder="Min. 6 characters"
-                data-testid="input-password"
-                style={{ ...inputStyle, paddingRight: 42 }}
-                onFocus={e => (e.target.style.borderColor = "var(--gold)")}
-                onBlur={e => (e.target.style.borderColor = "var(--border-color)")}
+                className={`pr-10 ${errors.password && touched.password ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                aria-invalid={!!(errors.password && touched.password)}
               />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}>
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)} 
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            {errors.password && touched.password && (
+              <p className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3 h-3" /> {errors.password}
+              </p>
+            )}
           </div>
 
-          <div>
-            <label style={labelStyle}>Preferred Language</label>
+          <div className="space-y-2">
+            <Label htmlFor="language">Preferred Language</Label>
             <select
+              id="language"
               value={lang}
               onChange={e => setLang(e.target.value as Language)}
-              style={{ ...inputStyle, cursor: "pointer" }}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {(Object.entries(LANGUAGES) as [Language, { nativeLabel: string }][]).map(([code, info]) => (
                 <option key={code} value={code}>{info.nativeLabel}</option>
@@ -186,28 +209,21 @@ export default function RegisterPage() {
             </select>
           </div>
 
-          <button type="submit" disabled={isLoading} data-testid="button-register" style={{
-            padding: "13px", background: "var(--forest)", color: "var(--gold-pale)",
-            border: "none", borderRadius: 10, fontFamily: "'Instrument Sans', sans-serif",
-            fontSize: 15, fontWeight: 600, cursor: isLoading ? "not-allowed" : "pointer",
-            opacity: isLoading ? 0.7 : 1, transition: "all 0.2s", marginTop: 4
-          }}>
+          <Button type="submit" className="w-full mt-2" size="lg" disabled={isLoading}>
             {isLoading ? "Creating account…" : "Register"}
-          </button>
+          </Button>
         </form>
 
-        <div style={{ textAlign: "center", marginTop: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-          <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+        <div className="mt-8 text-center space-y-4">
+          <p className="text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login">
-              <span style={{ fontWeight: 700, color: "var(--ink)", cursor: "pointer" }}>Login</span>
+            <Link href={`/login${window.location.search}`}>
+              <span className="font-bold text-foreground hover:text-primary cursor-pointer transition-colors">Login</span>
             </Link>
           </p>
-          <p>
-            <button onClick={() => navigate("/chat")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-muted)", fontSize: 13 }}>
-              Continue as Guest
-            </button>
-          </p>
+          <Button variant="ghost" onClick={() => navigate("/chat")} className="text-sm text-muted-foreground">
+            Continue as Guest
+          </Button>
         </div>
       </div>
     </div>

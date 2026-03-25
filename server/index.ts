@@ -1,7 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import rateLimit from "express-rate-limit";
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,6 +23,31 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+
+// ── Rate Limiting (LexAI Security Spec: 100 req/min per IP) ─────────
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many requests, please slow down.' } },
+  skip: (req) => req.path === '/api/health' || req.path === '/api/ready',
+});
+
+// Stricter limit for auth endpoints to prevent brute-force (10/min)
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many auth attempts. Please wait a minute.' } },
+});
+
+app.use('/api', globalLimiter);
+app.use('/api/auth', authLimiter);
+app.use('/api/login', authLimiter);
+app.use('/api/register', authLimiter);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -62,17 +89,40 @@ app.use((req, res, next) => {
 (async () => {
   await registerRoutes(httpServer, app);
 
-  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    const requestId = (req.headers['x-request-id'] as string) || crypto.randomUUID();
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    console.error("Internal Server Error:", err);
+    const isOperational = err.isOperational === true || status < 500;
+    
+    // Structured error logging
+    const logData = {
+      event: status >= 500 ? 'error.unhandled' : 'error.operational',
+      requestId,
+      status,
+      message: err.message,
+      stack: status >= 500 ? err.stack : undefined,
+      path: req.path,
+      method: req.method,
+    };
+    
+    if (status >= 500) {
+      console.error(JSON.stringify({ level: 'CRITICAL', ...logData }));
+    } else {
+      console.warn(JSON.stringify({ level: 'WARN', ...logData }));
+    }
 
     if (res.headersSent) {
       return next(err);
     }
 
-    return res.status(status).json({ message });
+    // Required global error envelope shape from engineering guide
+    return res.status(status).json({
+      error: {
+        code: isOperational ? (err.code || 'VALIDATION_ERROR') : 'INTERNAL_ERROR',
+        message: isOperational ? err.message : 'An unexpected error occurred.',
+        requestId,
+      }
+    });
   });
 
   // importantly only setup vite in development and after

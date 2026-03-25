@@ -138,7 +138,7 @@ export default function LandingPage() {
         position: "relative", overflow: "hidden"
       }}>
         {/* Mandala SVG */}
-        <svg style={{ position: "absolute", right: -100, top: "50%", transform: "translateY(-50%)", width: 700, height: 700, opacity: 0.06, pointerEvents: "none" }} viewBox="0 0 700 700" fill="none">
+        <svg style={{ position: "absolute", right: -100, top: "50%", transform: "translateY(-50%)", width: 700, height: 700, opacity: 0.14, pointerEvents: "none" }} viewBox="0 0 700 700" fill="none">
           <circle cx="350" cy="350" r="300" stroke="#1A2E1A" strokeWidth="1"/>
           <circle cx="350" cy="350" r="240" stroke="#1A2E1A" strokeWidth="0.5"/>
           <circle cx="350" cy="350" r="180" stroke="#1A2E1A" strokeWidth="0.5"/>
@@ -231,7 +231,7 @@ export default function LandingPage() {
             {/* Citizen Card */}
             <div className="portal-card" onClick={startChat}>
               <div style={{ padding: "44px 40px 36px", background: "var(--forest)", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", right: -60, top: -60, width: 200, height: 200, borderRadius: "50%", border: "40px solid rgba(255,255,255,0.04)" }} />
+                <div style={{ position: "absolute", right: -60, top: -60, width: 200, height: 200, borderRadius: "50%", border: "40px solid rgba(255,255,255,0.12)" }} />
                 <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--gold)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ width: 20, height: 1, background: "var(--gold)", display: "inline-block" }} />
                   For Citizens
@@ -258,7 +258,7 @@ export default function LandingPage() {
             {/* Lawyer Card */}
             <div className="portal-card" onClick={() => navigate("/vakil-sahayak")}>
               <div style={{ padding: "44px 40px 36px", background: "var(--ink)", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", right: -60, top: -60, width: 200, height: 200, borderRadius: "50%", border: "40px solid rgba(255,255,255,0.04)" }} />
+                <div style={{ position: "absolute", right: -60, top: -60, width: 200, height: 200, borderRadius: "50%", border: "40px solid rgba(255,255,255,0.12)" }} />
                 <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--gold)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ width: 20, height: 1, background: "var(--gold)", display: "inline-block" }} />
                   For Advocates
@@ -300,6 +300,10 @@ export default function LandingPage() {
               { href: "/nalsa-check", emoji: "✅", title: "NALSA Eligibility", desc: "5-question check to see if you qualify for government free legal aid.", tag: "Instant Result" },
               { href: "/undertrial-tracker", emoji: "⚖️", title: "Undertrial Tracker (436A)", desc: "Calculate if an undertrial is eligible for bail under Section 436A CrPC.", tag: "Legal Calculator" },
               { href: "/vakil-sahayak", emoji: "🔍", title: "Vakil Sahayak", desc: "AI case law research, client tracker, draft studio and hearing calendar for advocates.", tag: "For Lawyers" },
+              { href: "/legal-news", emoji: "📰", title: "Legal News", desc: "Live updates from LiveLaw and Bar & Bench — new judgments, amendments, and legal developments.", tag: "Live RSS Feed" },
+              { href: "/financial-aid", emoji: "🏦", title: "Financial Aid Guide", desc: "Step-by-step guide for SARFAESI, cheque bounce Sec 138, income tax notices, and banking ombudsman.", tag: "6 Modules" },
+              { href: "/know-your-rights", emoji: "📚", title: "Know Your Rights", desc: "Plain-language explainers for IPC, CrPC, RTI, Consumer Protection, DV Act — with FIR assistant.", tag: "Citizen Guide" },
+              { href: "/startup-hub", emoji: "🚀", title: "Startup Legal Hub", desc: "Incorporation checklist, compliance calendar, key agreements, and IP guide for early-stage founders.", tag: "Founder Suite" },
             ].map(tool => (
               <Link key={tool.href} href={tool.href} style={{ textDecoration: "none" }}>
                 <div

@@ -7,6 +7,22 @@ import {
   type Message, type InsertMessage,
   type Bookmark, type InsertBookmark,
 } from "@shared/schema";
+import { encryptPII, decryptPII } from "./lib/crypto";
+
+function encryptUser(data: Partial<InsertUser>): Partial<InsertUser> {
+  const result = { ...data };
+  if (result.name) result.name = encryptPII(result.name) as string;
+  if (result.openaiApiKey) result.openaiApiKey = encryptPII(result.openaiApiKey) as string;
+  return result;
+}
+
+function decryptUser<T extends User | undefined>(user: T): T {
+  if (!user) return user;
+  const result = { ...user };
+  if (result.name) result.name = decryptPII(result.name) as string;
+  if (result.openaiApiKey) result.openaiApiKey = decryptPII(result.openaiApiKey) as string;
+  return result as T;
+}
 
 export interface IStorage {
   // Users
@@ -38,43 +54,49 @@ export interface IStorage {
 class DatabaseStorage implements IStorage {
   // ── Users ──────────────────────────────────────────────────────
   createUser(data: InsertUser): User {
-    return db.insert(users).values({ ...data, createdAt: new Date() }).returning().get()!;
+    const encryptedData = encryptUser(data) as InsertUser;
+    const result = db.insert(users).values({ ...encryptedData, createdAt: new Date() }).returning().get()!;
+    return decryptUser(result);
   }
 
   getUserById(id: string): User | undefined {
-    return db.select().from(users).where(eq(users.id, id)).get();
+    return decryptUser(db.select().from(users).where(eq(users.id, id)).get());
   }
 
   getUserByEmail(email: string): User | undefined {
-    return db.select().from(users).where(eq(users.email, email)).get();
+    return decryptUser(db.select().from(users).where(eq(users.email, email)).get());
   }
 
   updateUserLanguage(id: string, lang: string): User | undefined {
-    return db.update(users)
+    const result = db.update(users)
       .set({ preferredLanguage: lang })
       .where(eq(users.id, id))
       .returning()
       .get();
+    return decryptUser(result);
   }
 
   getUserByGoogleId(googleId: string): User | undefined {
-    return db.select().from(users).where(eq(users.googleId, googleId)).get();
+    return decryptUser(db.select().from(users).where(eq(users.googleId, googleId)).get());
   }
 
   updateUserApiKey(id: string, apiKey: string | null): User | undefined {
-    return db.update(users)
-      .set({ openaiApiKey: apiKey })
+    const encryptedKey = apiKey ? encryptPII(apiKey) : null;
+    const result = db.update(users)
+      .set({ openaiApiKey: encryptedKey as string })
       .where(eq(users.id, id))
       .returning()
       .get();
+    return decryptUser(result);
   }
 
   updateUserGoogleId(id: string, googleId: string): User | undefined {
-    return db.update(users)
+    const result = db.update(users)
       .set({ googleId })
       .where(eq(users.id, id))
       .returning()
       .get();
+    return decryptUser(result);
   }
 
   // ── Sessions ───────────────────────────────────────────────────
