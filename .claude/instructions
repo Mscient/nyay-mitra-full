@@ -1,0 +1,29 @@
+# NYAY-MITRA AI ASSISTANT RULES — v1.0
+# All AI coding tools on this project must follow these rules.
+ 
+## Security Requirements (Non-Negotiable)
+- ALWAYS use parameterised queries. NEVER concatenate user input into SQL.
+- ALWAYS validate and sanitise all user inputs before they reach any AI model.
+- NEVER hardcode API keys, passwords, JWTs, or secrets of any kind.
+- ALWAYS use AES-256-GCM for encryption of PII fields. Never MD5 or SHA1 for secrets.
+- ALWAYS use bcrypt (cost 12) or Argon2id for password hashing.
+- ALWAYS add rate limiting to any new endpoint. Default: 100 req/min per IP.
+- For any new table: add row-level security policy isolating by tenant_id.
+- NEVER expose internal error details in API responses. Log internally, return generic message.
+ 
+## AI-Specific Rules
+- Any function that calls an external AI API must: strip PII before the call, log the call hash, handle timeout < 10s.
+- AI-generated document content must always pass through the guardrail checker before returning to user.
+- NEVER allow AI model calls to trigger irreversible actions (payments, sends, deletes) without human confirmation.
+- All AI prompts must be loaded from /prompts/ directory. No inline prompt strings in business logic.
+ 
+## India Legal Platform Rules
+- Documents returned to users must include the IS_AI_GENERATED flag in response metadata.
+- All stamp duty calculations must be validated against the stamp_duty_rules table — never hardcoded.
+- Legal text output must never include the phrases 'you will win', 'you have a strong case', 'I advise you to'.
+- Aadhaar numbers must never be stored in full. Mask after KYC. Only last 4 digits in DB.
+ 
+## Code Quality Gates
+- All new code must have unit tests with > 80% coverage before PR.
+- Security-sensitive functions (auth, crypto, file access) require a separate security reviewer.
+- AI-generated code blocks must be tagged with // AI-GENERATED: [tool] in the first comment line.

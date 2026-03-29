@@ -1,0 +1,656 @@
+📋
+न्याय मित्र
+AI DEVELOPMENT RULEBOOK
+Regulatory Guide  •  AI Skills Map  •  Security Rules  •  Compliance Framework
+Every developer on Nyay-Mitra reads this first. No exceptions.
+This document governs how AI is used to BUILD Nyay-Mitra AND how AI is deployed INSIDE Nyay-Mitra. Both are covered. Neither is optional.
+Chapter
+Title
+Applies To
+01
+India AI Regulatory Landscape — What Laws Govern Us
+Legal, Product, Engineering
+02
+The 25 Non-Negotiable Rules — Printed and Pinned
+Every Developer, Every Day
+03
+AI Skills Required — Who Needs What
+Engineering, Product, QA
+04
+Using AI to Build Nyay-Mitra — Code Generation Rules
+All Developers
+05
+AI Features Inside Nyay-Mitra — Product Guardrails
+Product + Engineering
+06
+OWASP LLM Top 10 — How We Defend Against Each
+Security + Engineering
+07
+Data & Privacy Rules for AI
+Engineering + Compliance
+08
+Quality Control — Reviewing AI-Generated Work
+All Developers + QA
+09
+Incident Rules — When AI Goes Wrong
+Engineering + Management
+10
+The Checklist — Before Any AI Feature Goes Live
+Product + Engineering + Legal
+01  |  India AI Regulatory Landscape — What Laws Govern Nyay-Mitra
+India does not yet have a single AI Act. Instead, a patchwork of existing laws plus three new frameworks directly governs how Nyay-Mitra builds and deploys AI. Ignorance of these is not a defence. Every engineer must understand what applies to them.
+1.1  The Laws That Apply — Right Now
+Law / Framework
+What It Covers for Nyay-Mitra
+Our Obligation
+Risk if Ignored
+IT Act 2000 + Amendment 2008
+AI-generated documents, digital signatures, e-contracts
+AI-generated content must comply with Section 65B; eSign under Section 3A
+Criminal liability; documents inadmissible
+DPDP Act 2023 + DPDP Rules 2025 (in force Nov 2025)
+Every user data point processed by any AI model
+Consent before AI processing; right to deletion; data minimisation
+₹250 crore penalty per breach; ₹50 crore per processing violation
+MeitY AI Advisory March 2024
+AI platforms must not enable unlawful content; no bias; label unreliable models
+Label AI outputs clearly; test AI models before deployment; no discriminatory AI outputs
+Intermediary safe harbour under Section 79 may be lost
+MeitY AI Governance Guidelines Nov 2025
+Sectoral regulation; Do No Harm principle; human-centric AI
+Adopt 7 Sutras: Trust, People First, Fairness, Accountability, Explainability, Safety, Innovation
+Regulatory scrutiny; loss of government partnership eligibility
+RBI FREE-AI Framework 2025
+AI in financial products (our financial aid module)
+7 sutras for financial AI: fairness, explainability, auditability, security, governance, human oversight
+Regulatory action on financial AI features; RBI enforcement
+CERT-In AI Security Advisory 2025
+AI system security — AIBOM (AI Bill of Materials)
+Maintain AI Bill of Materials; report AI-related security incidents within 6 hours
+CERT-In enforcement; loss of government project eligibility
+Indian Evidence Act 1872 (via IT Act)
+Admissibility of AI-generated documents in court
+AI-generated legal documents must meet Section 65B standards
+Documents rejected by courts; platform liability to users
+Consumer Protection Act 2019
+AI harms to consumers qualify as 'deficiency of service'
+AI errors in legal advice or documents = consumer complaint
+Consumer Forum orders; compensation liability
+Advocates Act 1961
+Only enrolled advocates can practice law
+AI cannot provide legal advice; must be information only
+BCI action; platform shut-down order
+1.2  MeitY's Seven Sutras — Our Design Principles
+The MeitY AI Governance Guidelines (November 5, 2025) are built on 7 Sutras that every AI system deployed in India must internalise. These are not aspirational — they are the basis on which regulators will evaluate AI systems.
+Sutra
+Principle
+How Nyay-Mitra Implements It
+1 — Trust as Foundation
+Users must be able to trust AI outputs
+Every AI output is labelled; confidence levels shown; human review available
+2 — People First
+AI must benefit people, not just efficiency
+Legal aid for citizens; lawyer tools to serve clients better; not to replace lawyers
+3 — Fairness & Equity
+AI must not discriminate
+InLegalBERT bias testing across all 28 states; multilingual equity; no income-based AI quality tiers
+4 — Accountability
+Someone must own AI decisions
+Every AI output traceable to prompt version + model version + timestamp in immutable log
+5 — Understandable by Design
+AI decisions must be explainable
+AI document generation shows which clause came from which template; no black-box outputs
+6 — Safety & Resilience
+AI must not cause harm
+Guardrails on all AI outputs; no outcome predictions; human-in-the-loop for all legal documents
+7 — Innovation over Restraint
+Regulate only what is necessary
+Build fast; test continuously; add controls only where risk is real, not theoretical
+02  |  The 25 Non-Negotiable Rules — Printed, Pinned, Permanent
+These 25 rules are absolute. They apply to every engineer, every PR, every deployment, every AI prompt, and every AI feature. If a rule blocks your work, escalate — do not work around it.
+PART A — Rules for Using AI to Build Nyay-Mitra
+R01
+Never Paste Real User Data Into Any AI Tool
+Never send actual client names, case numbers, Aadhaar numbers, phone numbers, or any production data into Claude, Copilot, ChatGPT, Cursor, or any external AI tool during development. Use only synthetic data. Real data in external AI = immediate DPDP violation.
+R02
+Every AI-Generated Code Block Gets a Human Security Review
+AI code assistants produce vulnerable code in up to 62% of cases (2025 research). Every function generated by AI must be reviewed by a human developer before merge. No auto-merge of AI code ever. The reviewer signs off — not the AI.
+R03
+Verify Every AI-Suggested Package Before Installing
+LLMs hallucinate package names that do not exist — attackers publish malicious packages with those names. Before npm install or pip install of any AI-suggested package: verify it on npmjs.com/pypi.org, check download count, check last publish date, check maintainer. Zero exceptions.
+R04
+Never Hardcode Any Secret — AI Code or Human Code
+GitHub reported 39 million leaked secrets in 2024. AI code assistants are trained to follow patterns and may reproduce API keys from training data. All secrets in HashiCorp Vault. Run git-secrets and trufflehog on every commit. If a secret is ever committed: rotate it within 10 minutes.
+R05
+Maintain an AI Bill of Materials (AIBOM) for Every Feature
+CERT-In's 2025 AI advisory requires an AI Bill of Materials. For every AI feature in Nyay-Mitra, document: which model is used, version, provider, what data it receives, what it outputs, and any known limitations. Update the AIBOM when models change. This is a legal requirement.
+R06
+Test AI Features for Bias Before Shipping
+MeitY's March 2024 advisory requires platforms to test AI models for bias. Before any AI feature ships: test outputs across all 28 states, all major languages, across gender and income proxies. Document results. If bias detected: do not ship. Fix first.
+R07
+All AI-Generated Code Must Pass the Same CI/CD Security Gates as Human Code
+SAST (SonarQube), dependency scan (Snyk), secret scan (trufflehog), and DAST (OWASP ZAP) apply equally to AI-generated and human-written code. AI is not exempt from quality gates. There is no 'AI fast lane' to production.
+R08
+Document What AI Was Used For in Every PR Description
+Every pull request must state: which AI tools were used, which parts of the code were AI-generated, and what human review was performed on those parts. This creates an audit trail and a training feedback loop for the team.
+PART B — Rules for AI Features Inside Nyay-Mitra (What the Product Does)
+R09
+AI Is An Assistant — Never a Decision Maker
+Nyay-Mitra AI suggests, drafts, summarises, and retrieves. It never decides: who wins a case, whether to file, what legal strategy to take, whether someone is guilty. Every AI output is an input to a human decision. Encode this in every AI feature's UX copy.
+R10
+Every AI Output Visible to Users Must Be Labelled
+MeitY March 2024 advisory: unreliable AI outputs must be labelled. For Nyay-Mitra: every AI-generated document draft, every case summary, every legal explanation must show 'Generated by AI — Verify before relying.' No exceptions. This label cannot be hidden, dismissed, or minimised.
+R11
+No Client PII in External AI API Calls Without Explicit Consent
+Before any user data (name, case number, phone, matter description) goes into an API call to Claude, OpenAI, or any external AI: (a) the user must have explicitly consented to AI processing, (b) PII must be pseudonymised where possible, (c) a DPA must be signed with the AI provider.
+R12
+No Outcome Prediction Shown to Citizens
+Nyay-Mitra will never show a citizen 'You have a 72% chance of winning.' This is legal advice under the Advocates Act and creates false expectations. Instead: show pattern data — 'In 847 similar cases at Bombay HC, courts ruled for tenants in 72% on this issue.' Factual, not predictive.
+R13
+AI-Generated Legal Documents Are Always Reviewed Before Execution
+Every AI-generated document goes through the following gate before stamp + sign: (a) advocate-users confirm professional review, (b) citizen-users get a mandatory 'Have a lawyer review this' prompt with a 30-min booking offer. The execute button is only active after this step.
+R14
+Self-Hosted AI Mode Must Be Available for Privileged Communications
+Attorney-client privileged conversations that are processed by AI must never leave Nyay-Mitra infrastructure. Lawyers can select 'Air-gap mode' — processing only via self-hosted Llama 3 on our GPU cluster. No external API. This is a product feature, not a setting.
+R15
+AI Prompts Are Code — Version Control Them
+Every system prompt, every template prompt, every few-shot example used in Nyay-Mitra's AI features must be in the Git repository under /prompts/. They are reviewed in PRs just like code. Changes to prompts require the same approvals as code changes. No ad-hoc prompts in production.
+R16
+Rate Limit All AI Endpoints — Hard Caps
+AI API calls cost money and can be abused. Hard limits: 20 AI requests per user per minute; 10 document generations per account per hour on free plan; 100 per hour on paid. Implement at API Gateway level — not at application level. Failure to do this has bankrupted startups.
+R17
+Log Every AI Interaction — Immutably
+Every AI call must log: user_id (hashed), timestamp, model + version, prompt hash (not full prompt), output hash, latency, cost, success/failure. Logs stored in S3 with Object Lock (WORM). Retention: 7 years. These logs are needed for legal discovery, CERT-In incidents, and bias audits.
+R18
+Hallucination Is a Bug — Treat It as One
+When AI generates a case citation that does not exist, a stamp duty amount that is wrong, or a clause that misrepresents the law — that is a bug. It goes in the bug tracker with P1 severity. The feature is pulled until the hallucination is reproduced, root-caused, and fixed with a guardrail.
+PART C — Security, Legal & Team Rules
+R19
+Advocates Act Boundary — Engrave This
+Nyay-Mitra provides LEGAL INFORMATION not LEGAL ADVICE. The boundary: information explains the law generally; advice applies the law to a specific person's facts. Every AI feature that could cross this line must be reviewed by an empanelled advocate before shipping. Non-compliance: BCI shut-down order.
+R20
+MeitY Advisory Compliance Is Continuous — Not One-Time
+MeitY's AI advisory requires platforms to continuously test AI models. Assign one engineer per quarter as AI Compliance Owner. They run the bias test suite, update the AIBOM, review the AI label implementation, and sign off. This is a quarterly deliverable, not a checkbox.
+R21
+No AI Feature Ships Without a User-Facing Explanation of What It Does
+Every AI feature visible to users must have: (a) a plain-language explanation of what the AI does with their data, (b) an opt-out option where feasible, (c) a disclosure that AI is used. This is required by DPDP Act 2023 consent requirements and MeitY's guidelines.
+R22
+OWASP LLM Top 10 Is Checked for Every AI Feature
+Before any AI feature goes live, the engineer responsible runs through the OWASP LLM Top 10 checklist (see Chapter 06 of this document). The completed checklist is attached to the feature's release PR. No AI feature ships without it.
+R23
+AI Models Must Be Pinned to Versions — No Auto-Upgrade
+An AI model update can change output behaviour silently. Pin every AI model to a specific version (e.g., claude-sonnet-4-20250514, not 'latest'). Test before upgrading. Document what changed in behaviour after upgrade. Treat model upgrades like library upgrades: deliberate and tested.
+R24
+Keep Humans in the Loop for Any Irreversible Action
+Any action that is irreversible — sending a legal notice, executing a document, making a payment, deleting a file — must have a human confirmation step that cannot be automated or bypassed by AI. No AI agent can trigger irreversible actions autonomously on this platform.
+R25
+The Privacy-by-Design Rule: AI Should Only See What It Needs
+Before any AI call: strip the prompt to the minimum data needed for the task. If generating a clause suggestion, the AI does not need the client's name. If summarising an order, the AI does not need the billing information. Minimum data = minimum breach surface. Always.
+03  |  AI Skills Required — Who Needs What
+Every member of the Nyay-Mitra team needs a different depth of AI skills. This section maps skills to roles and identifies the tools each person must be proficient with. Skills marked MANDATORY must be demonstrated before working on any AI-touching feature.
+3.1  Engineering Team — Required AI Skills
+⚙  Prompt Engineering   MANDATORY for all engineers
+Tools: Claude API, LangChain, system prompt design, few-shot examples, chain-of-thought
+Use for: Writing production system prompts for document generation, legal research, clause suggestion
+🔐  LLM Security   MANDATORY for all engineers
+Tools: OWASP LLM Top 10, prompt injection patterns, input sanitisation, output validation
+Use for: Defending every AI endpoint against injection, data leakage, and jailbreak
+🏗  RAG Architecture   MANDATORY for AI feature engineers
+Tools: LangChain RAG, Elasticsearch dense_vector, FAISS, InLegalBERT, Pinecone
+Use for: Building semantic case law search, clause library retrieval, legal Q&A system
+📊  AI Evaluation & Testing   MANDATORY for QA and feature engineers
+Tools: RAGAS, TruLens, custom eval harnesses, bias testing frameworks
+Use for: Measuring hallucination rate, answer relevance, faithfulness; running bias audits
+🔧  AI Infrastructure   Required for backend engineers
+Tools: Kubernetes GPU nodes, HuggingFace Inference Endpoints, vLLM, Triton Inference Server
+Use for: Self-hosting Whisper, InLegalBERT, Llama 3 for air-gap mode
+🌍  Multilingual NLP   Required for Indian language features
+Tools: IndicBERT, MuRIL, InLegalTrans, Azure Cognitive Services, Whisper multilingual fine-tuning
+Use for: Hindi/regional language voice, multilingual document generation, regional language UI
+📱  On-Device AI   Required for mobile engineers
+Tools: whisper.cpp, Core ML (iOS), TFLite (Android), ONNX Runtime
+Use for: Offline voice recognition, on-device clause extraction for courtroom use
+3.2  Product Team — Required AI Skills
+🎯  AI Product Design   MANDATORY for all PMs
+Tools: Human-in-the-loop patterns, AI UX guidelines (Google PAIR, Microsoft HAX), uncertainty communication
+Use for: Designing AI features that are helpful without being misleading; handling AI errors gracefully
+⚖  AI Ethics & Compliance   MANDATORY for all PMs
+Tools: MeitY AI Guidelines, DPDP Act, Advocates Act, AI bias frameworks, EU AI Act (reference)
+Use for: Ensuring product features stay within legal boundaries; writing AI feature briefs that include compliance constraints
+📋  AI Requirements Writing   Required for PMs
+Tools: Writing AI acceptance criteria, defining AI guardrails in product specs, documenting what AI should refuse to do
+Use for: Every AI feature spec must include: what the AI must do, what it must never do, and how errors are handled
+3.3  Skill Development Plan
+Role
+Month 1
+Month 2
+Month 3
+Milestone
+All Engineers
+OWASP LLM Top 10 self-study + quiz
+Prompt engineering: 10 documented production prompts
+Complete security review of one AI feature
+Pass internal AI Security certification
+Backend Engineers
+RAG architecture: build a working demo
+InLegalBERT integration in dev environment
+Ship semantic case search to staging
+Sub-200ms search on 1M case records
+Mobile Engineers
+whisper.cpp integration on test device
+On-device model inference < 2GB RAM
+Offline voice demo on Android
+Ship offline hearing diary dictation
+All PMs
+Read all 8 regulatory documents in Ch01
+Audit one existing AI feature against 25 rules
+Write one AI feature spec with full guardrails section
+Present AI compliance review at sprint review
+QA Engineers
+Set up RAGAS evaluation harness
+Run first hallucination rate baseline
+Build automated AI regression test suite
+Hallucination rate < 3% on document generation
+04  |  Using AI to Build Nyay-Mitra — Code Generation Rules
+AI coding assistants — Claude, Cursor, Copilot, or any other — are encouraged on Nyay-Mitra. They accelerate development significantly. But they require governance. This chapter defines exactly how to use them safely.
+4.1  Approved AI Coding Tools
+Tool
+Approved For
+Not Approved For
+Data Rule
+Claude (claude.ai / API)
+Architecture, code review, documentation, test writing, debugging
+Production user data in prompts
+Synthetic data only; no secrets
+Cursor / Copilot
+Code completion, refactoring, unit test generation
+Uploading real DB dumps or logs to context
+Dev/staging data only; never production
+GitHub Copilot
+Inline code suggestions in IDE
+Auto-accepting suggestions without review
+No production context files open
+ChatGPT
+Research, architecture discussion, explaining concepts
+Any code that touches user data or crypto
+Public information only
+Self-hosted Llama (internal)
+Sensitive internal code — DB schema, auth logic
+None — approved for all internal use
+Can use internal docs and schemas
+4.2  The Nyay-Mitra Cursor / Claude Rules File
+Every developer must have this file at .cursor/rules and .claude/instructions in the project root. It embeds security requirements directly into the AI assistant:
+# NYAY-MITRA AI ASSISTANT RULES — v1.0
+# All AI coding tools on this project must follow these rules.
+ 
+## Security Requirements (Non-Negotiable)
+- ALWAYS use parameterised queries. NEVER concatenate user input into SQL.
+- ALWAYS validate and sanitise all user inputs before they reach any AI model.
+- NEVER hardcode API keys, passwords, JWTs, or secrets of any kind.
+- ALWAYS use AES-256-GCM for encryption of PII fields. Never MD5 or SHA1 for secrets.
+- ALWAYS use bcrypt (cost 12) or Argon2id for password hashing.
+- ALWAYS add rate limiting to any new endpoint. Default: 100 req/min per IP.
+- For any new table: add row-level security policy isolating by tenant_id.
+- NEVER expose internal error details in API responses. Log internally, return generic message.
+ 
+## AI-Specific Rules
+- Any function that calls an external AI API must: strip PII before the call, log the call hash, handle timeout < 10s.
+- AI-generated document content must always pass through the guardrail checker before returning to user.
+- NEVER allow AI model calls to trigger irreversible actions (payments, sends, deletes) without human confirmation.
+- All AI prompts must be loaded from /prompts/ directory. No inline prompt strings in business logic.
+ 
+## India Legal Platform Rules
+- Documents returned to users must include the IS_AI_GENERATED flag in response metadata.
+- All stamp duty calculations must be validated against the stamp_duty_rules table — never hardcoded.
+- Legal text output must never include the phrases 'you will win', 'you have a strong case', 'I advise you to'.
+- Aadhaar numbers must never be stored in full. Mask after KYC. Only last 4 digits in DB.
+ 
+## Code Quality Gates
+- All new code must have unit tests with > 80% coverage before PR.
+- Security-sensitive functions (auth, crypto, file access) require a separate security reviewer.
+- AI-generated code blocks must be tagged with // AI-GENERATED: [tool] in the first comment line.
+4.3  The Synthetic Data Library
+All development and testing uses synthetic data from Nyay-Mitra's internal synthetic data library. This library is maintained in /dev/synthetic-data/ and contains:
+500 synthetic advocate profiles — fake BCI numbers, fake names, fake courts
+1,000 synthetic client records — fake names, fake Aadhaar (structure valid, not real), fake cases
+200 synthetic court orders — realistic formatting, fake case numbers, fake parties
+50 synthetic company profiles — fake GST numbers, fake incorporation dates
+Faker.js + Indian locale customisation used to generate — all seeded and reproducible
+Script: npm run generate-synthetic -- --count=1000 refreshes the library on demand
+4.4  AI-Assisted Code Review Checklist
+When reviewing AI-generated code, check these in order before approving:
+Check
+What to Look For
+Fail Condition
+SQL Injection
+All DB queries use parameterised statements or ORM
+Any string concatenation with user input in a query
+Hardcoded Secrets
+No API keys, passwords, tokens in code
+Any string matching credential pattern (regex: automated)
+PII Handling
+Encryption applied to all PII fields before storage
+Any plaintext PII written to DB or logged
+Package Versions
+All packages pinned to exact version; no ^ or ~ in package.json
+Any unpinned package version
+Error Handling
+All errors caught; generic message to user; detailed log server-side
+try/catch missing; error.stack exposed to API response
+AI API Calls
+PII stripped before call; timeout set; logging in place
+Full user data in prompt; no timeout; no logging
+Rate Limiting
+Rate limit middleware on new routes
+New route with no rate limit
+Input Validation
+Zod/Joi schema validation on all request inputs
+Unvalidated req.body used in business logic
+Test Coverage
+New functions have unit tests
+Functions without tests (SonarQube enforces > 80%)
+AI Label
+User-facing AI output has IS_AI_GENERATED flag
+AI response returned without label metadata
+05  |  AI Features Inside Nyay-Mitra — Product Guardrails
+This chapter defines the exact guardrail logic for each AI feature in the product. These are engineering specifications — not guidelines. Each guardrail is a must-build, not a nice-to-have.
+5.1  Document Generation Guardrails
+Input
+Guardrail
+Output Constraint
+User-entered form fields
+Strip HTML/scripts; length-limit all fields; validate against template schema
+Template renders only pre-approved clause set; no free-form AI generation of binding terms
+Uploaded document for clause extraction
+Virus scan; file type whitelist (PDF/DOCX only); size limit 10MB; OCR then NER only
+Extracted clauses shown for review — not auto-inserted; advocate confirms before use
+AI clause suggestion
+Suggestions sourced from pre-approved clause library only; no open-ended generation
+Must show source clause ID; advocate must select — system cannot auto-accept
+Stamp duty calculation
+Must query stamp_duty_rules table; never AI-generated number
+Stamp amount locked from edit; source rule displayed; UIN from SHCIL verifies
+AI document review flag
+Automated check for 20 known dangerous clause patterns
+Flag shown as warning; cannot suppress; advocate must acknowledge before eSign
+5.2  Legal Research & Case Search Guardrails
+Scenario
+Guardrail
+Why
+User asks 'Will I win this case?'
+Block; show: 'Nyay-Mitra provides case patterns, not predictions.' Offer pattern data.
+Advocates Act; false expectations; legal advice boundary
+User asks for advice on their specific case
+Reframe to information: show relevant law, cases, rights; recommend consulting an advocate
+Advocates Act 1961; liability
+Case citation returned by AI
+Every citation verified against IndianKanoon API before display; unverified citations blocked
+Hallucination prevention; professional reliability
+Search for sensitive case (minor victim, sexual offence)
+Restrict access; advocate-only with BCI verification; log every access
+Information Technology Act; victim privacy; court sealing orders
+Outdated law referenced
+If AI references IPC when BNS now applies: auto-flag with 'Law updated: BNS Section X now applies'
+Accuracy; post-July 2024 BNS transition
+5.3  Citizen-Facing AI Guardrails
+Feature
+What AI Must Never Say
+What AI Must Always Say
+Know Your Rights
+'You should file a case' / 'Your landlord is wrong' / 'You will get compensation'
+'Under this law, you have the right to...' / 'The legal process is...' / 'Consult an advocate for your specific situation'
+FIR Assistant
+'The police must file your FIR' (binding advice)
+'Under Section 154 CrPC/BNSS, the police are required to register...' (statement of law)
+Legal Notice Draft
+'This notice will resolve your dispute'
+'This draft notice states your legal position. Have it reviewed by a lawyer before sending.'
+Lawyer Recommendation
+'Lawyer X is the best for your case'
+'Here are advocates in your area who practice in this area. Reviews are from verified platform users.'
+Any Response
+Never roleplay as a lawyer / judge / advocate
+Always identify as 'Nyay-Mitra AI — Legal Information Assistant, not a lawyer'
+06  |  OWASP LLM Top 10 (2025) — How We Defend Against Each
+The OWASP Top 10 for LLM Applications 2025 defines the 10 most critical vulnerabilities in AI systems. Prompt Injection is ranked #1. Every AI engineer must know all 10 and how Nyay-Mitra defends against each.
+#
+Vulnerability
+Risk to Nyay-Mitra
+Our Defence
+LLM01
+Prompt Injection
+User uploads a court order with hidden instructions to the AI; AI changes its behaviour when processing
+Strict input/output separation; user content processed in sandboxed context; no user content in system prompt; output validation before return
+LLM02
+Sensitive Data Exposure
+AI trained or prompted with PII leaks it in outputs to other users
+PII pseudonymised before AI call; no cross-user context; API response filtering; no training on user data
+LLM03
+Supply Chain Vulnerabilities
+AI model provider breached; fine-tuned model poisoned; malicious prompt library dependency
+Pin model versions; verify model hashes; maintain AIBOM; use only approved AI providers
+LLM04
+Data and Model Poisoning
+Malicious cases injected into training data corrupt legal research outputs
+Validate all ingested case data; human review of ingestion pipeline; anomaly detection on case embeddings
+LLM05
+Improper Output Handling
+AI generates a legal clause with XSS payload; rendered in browser without sanitisation
+Sanitise all AI outputs before rendering; use DOMPurify; treat AI output as untrusted input to frontend
+LLM06
+Excessive Agency
+AI agent is given too much permission; triggered to send legal notices without human approval
+Principle of least privilege for all AI agents; all irreversible actions require human confirmation; no autonomous sends
+LLM07
+System Prompt Leakage
+User tricks AI into revealing Nyay-Mitra's system prompts, exposing business logic
+System prompts not disclosed; output filter blocks prompt reflection; regular red-team testing
+LLM08
+Vector and Embedding Weaknesses
+Adversarial input manipulates case law embeddings; wrong cases returned for legal research
+Input validation before embedding; embedding anomaly detection; periodic embedding audit against ground truth
+LLM09
+Misinformation
+AI confidently states incorrect stamp duty amount; user overpays or document is invalid
+All factual claims (stamp duty, filing fees, section numbers) verified against authoritative DB before display
+LLM10
+Unbounded Consumption
+Attacker triggers thousands of AI calls; costs spike; service degraded for real users
+Hard rate limits per user/IP; budget alerts; circuit breakers on AI endpoints; fraud detection on AI usage patterns
+Prompt Injection — Special Attention
+Prompt injection is ranked #1 in OWASP LLM Top 10 2025. For Nyay-Mitra: every uploaded document (court order, contract, evidence) is processed by AI. A malicious document could contain hidden instructions. Defence: process user documents in an isolated context with no access to system functions; validate output structure; never use user document content as part of a system prompt.
+07  |  Data & Privacy Rules for AI — DPDP Compliance
+Data Type
+AI Processing Allowed?
+Condition
+Retention in AI Logs
+Client name
+Only if pseudonymised
+Substitute with UUID before AI call; restore in post-processing
+Never — strip before logging
+Case facts / matter description
+With advocate consent only
+Opt-in per matter; logged in consent table
+Hashed summary only; never raw
+Court orders (public)
+Yes — public documents
+No consent needed for public court orders
+Indexed in ES; 7-year retention
+Aadhaar number
+Never sent to any AI
+KYC done via DigiLocker; only last 4 digits stored
+Never
+Audio (voice dictation)
+Transcribed locally; transcript only to AI
+Whisper self-hosted; audio deleted after transcript
+Never — audio never stored
+Payment / financial data
+Never
+Razorpay handles payment; never enters Nyay-Mitra AI pipeline
+Never
+Privileged communications
+Air-gap only — self-hosted AI
+Advocate must enable air-gap mode; external API blocked
+On-premises log only; 7 years
+Aggregated analytics (no PII)
+Yes
+Stripped of all identifiers before AI analysis
+30 days in analytics log
+7.1  The AI Consent Flow
+On first use of any AI feature: user sees plain-language explanation of what AI does with their data
+Consent is granular: user can consent to document AI without consenting to research AI
+Consent is recorded in consents table with: user_id, feature, timestamp, IP, consent_text_version
+Withdrawing consent: user can withdraw at any time from settings; AI processing stops within 24 hours
+DPDP Rules 2025 requirement: consent must be as easy to withdraw as to give — same number of clicks
+7.2  Right to Deletion — AI-Specific Obligations
+When a user requests data deletion (DPDP right): all AI logs containing their data must be deleted within 72 hours
+Embeddings generated from their documents must be deleted from the vector index
+If their data was used in any fine-tuning: flag for model retraining with data removed (GDPR/DPDP 'machine unlearning')
+Deletion verified with a signed audit certificate sent to the user's registered email
+08  |  Quality Control — Reviewing AI-Generated Work
+Metric
+Target
+Measurement Method
+Action if Breached
+Hallucination Rate — Document Gen
+< 2% of generated clauses contain factual errors
+Weekly: 100 random docs reviewed by empanelled advocate
+Pull feature; fix prompt; re-test; re-ship
+Hallucination Rate — Case Citations
+0% — every citation must be verifiable
+Automated: every citation checked against IndianKanoon API
+Block citation display until verified; log as P1 bug
+Stamp Duty Accuracy
+100% — zero tolerance for wrong stamp amount
+Automated: compare AI calculation to rules table
+Block document generation until reconciled
+Bias Score — Regional Fairness
+Output quality equal across all 28 states
+Monthly: same query run from 28 state contexts; compare outputs
+Fix prompt; add state-specific context; re-test
+Bias Score — Language Fairness
+Output quality equal across Hindi, English, and 10 regional languages
+Monthly: parallel query test across all languages
+Improve language-specific training data; re-evaluate
+Response Latency — AI endpoints
+P99 < 3 seconds for document generation
+Datadog APM — continuous
+Optimise prompt; cache common outputs; scale GPU
+AI API Cost per Document
+< ₹2 per standard document generation
+Monthly cost report per document type
+Optimise prompt length; use smaller model where appropriate
+User-Reported AI Errors
+< 0.5% of AI interactions flagged by users
+In-app thumbs-down on every AI output
+Review all flags weekly; update guardrails
+09  |  Incident Rules — When AI Goes Wrong
+Scenario
+Severity
+Immediate Action
+Investigation
+User Communication
+AI generates a wrong legal citation used in a court filing
+P0 — Critical
+Pull the feature immediately; notify advocate
+Full prompt + model audit; root cause within 24h
+Direct call to affected advocate; written apology; remediation offer
+AI generates a wrong stamp duty amount — document executed
+P0 — Critical
+Escalate to legal team + SHCIL contact
+Verify all documents in same batch
+Notify affected users; assist with rectification filing
+AI reveals another user's data in a response
+P0 — Critical
+Pull AI feature; CERT-In notification within 6 hours
+Full prompt log audit; cross-user contamination analysis
+Notify affected users within 72 hours per DPDP Rules
+AI gives output that violates Advocates Act boundary
+P1 — High
+Edit or pull offending feature within 2 hours
+Prompt audit; guardrail gap analysis
+Internal review; update system prompt; re-deploy
+AI exhibits regional or language bias in outputs
+P1 — High
+Log and escalate to AI Compliance Owner
+Bias test suite run; affected prompts identified
+Blog post on findings and remediation — transparency
+AI hallucination in document — caught before execution
+P2 — Medium
+Fix prompt; add guardrail; log as bug
+Root cause; add to regression test suite
+No user communication needed if caught pre-execution
+AI model provider (Anthropic) has an outage
+P2 — Medium
+Auto-failover to self-hosted Llama 3 for basic features
+Monitor provider status page
+Status page update; in-app notification
+10  |  The Pre-Launch Checklist — Before Any AI Feature Goes Live
+This checklist is mandatory for every AI feature. The product manager and lead engineer sign off. The checklist is filed as a document in the vault-svc under /compliance/ai-launches/.
+#
+Check
+Owner
+Signed Off
+1
+OWASP LLM Top 10 reviewed and each risk addressed
+Lead Engineer
+2
+AI Bill of Materials (AIBOM) entry created for this feature
+Engineering
+3
+DPDP consent flow implemented and tested
+Engineering + PM
+4
+All AI outputs labelled with IS_AI_GENERATED in UI
+Frontend Engineer
+5
+Advocates Act boundary verified — no legal advice given
+PM + Empanelled Advocate
+6
+Bias test run across 28 states + all supported languages
+QA Engineer
+7
+Hallucination rate measured and documented (target < 2%)
+QA Engineer
+8
+Rate limits implemented and tested under load
+Backend Engineer
+9
+PII pseudonymisation verified in AI API calls
+Security Engineer
+10
+All prompts version-controlled in /prompts/ directory
+Lead Engineer
+11
+AI logging implemented — prompt hash, output hash, latency, cost
+Backend Engineer
+12
+Human-in-the-loop for any irreversible action confirmed
+PM + Lead Engineer
+13
+Self-hosted fallback available for privileged content features
+Infrastructure Engineer
+14
+Error handling tested — what happens if AI API is down?
+QA Engineer
+15
+User-facing explanation of AI written and approved
+PM
+16
+MeitY AI Advisory compliance self-checked
+PM + Compliance
+17
+CERT-In AIBOM updated and filed
+Engineering
+18
+Model version pinned — no 'latest' in production
+Lead Engineer
+19
+Security review completed by reviewer not on the AI feature team
+Security Engineer
+20
+Legal review completed by empanelled advocate for document features
+Empanelled Advocate
+न्याय मित्र AI Rulebook
+Build fast. Build safe. Build for 140 crore people.
+Version 1.0 — Review quarterly — Update with every regulatory change — File every pre-launch checklist

@@ -1,0 +1,1273 @@
+⚖
+न्याय मित्र
+Nyay-Mitra
+Technical Development Guide & System Design
+Complete Architecture  •  Document Engine  •  Security  •  Database  •  API Design  •  Dev Phases
+Production-grade blueprint  •  Every design decision explained  •  India-law compliant document engine  •  Zero-draft service model
+Section
+Topic
+Pages
+01
+Architecture Overview — The Full Picture
+3–5
+02
+Complete Legal Document Engine — No More Drafts
+6–10
+03
+Database Design — Schema, Courts, Cases, Lawyers
+11–14
+04
+API Design — Every Endpoint Mapped
+15–18
+05
+Security Architecture — Zero Compromise
+19–21
+06
+Development Phases — Sprint-by-Sprint Roadmap
+22–25
+07
+Infrastructure & DevOps
+26–27
+08
+Third-Party Integrations — Contracts & Code
+28–30
+01  |  Architecture Overview — The Complete System
+Nyay-Mitra is a multi-tenant SaaS platform with five distinct user types, each with different data needs and trust levels. The architecture is designed around three non-negotiable principles: India data residency, zero-draft legal documents, and human-verified AI outputs.
+1.1  User Types & Their Distinct Needs
+User Type
+Primary Need
+Trust Level
+Data Sensitivity
+Individual Citizen
+Legal rights info, case status, find a lawyer
+Low (anonymous browsing allowed)
+Low
+Verified Citizen
+Case tracking, legal aid, document downloads
+Medium (mobile OTP verified)
+Medium
+Practicing Advocate
+Full workspace — CRM, diary, billing, vault
+High (BCI enrollment verified)
+Very High
+Law Firm / Org Admin
+Team management, org vault, bulk docs
+High (GST + MCA verified)
+Very High
+Law Student
+Research, moot tools, AIBE prep
+Medium (college ID verified)
+Low
+1.2  System Architecture — All Layers
+Architecture Philosophy
+Nyay-Mitra follows a strict separation of concerns: the AI layer assists but never decides; the document layer produces legally valid outputs, not drafts; the data layer is fully encrypted per tenant; and the network layer assumes zero trust between all components.
+Layer
+Component
+Technology
+Role
+L0 — DNS & Edge
+Global CDN + WAF
+Cloudflare Enterprise
+DDoS, WAF, SSL termination, India PoPs
+L1 — Auth Gateway
+API Gateway
+AWS API Gateway + Lambda authoriser
+JWT validation, rate limiting, IP allowlist
+L2 — Web App
+Frontend SSR
+Next.js 14 on Vercel (Mumbai edge)
+Server-side rendered UI, PWA support
+L3 — Mobile
+Cross-platform app
+React Native (Expo) + Expo Go
+iOS + Android, offline SQLite support
+L4 — BFF
+Backend for Frontend
+Node.js Fastify + tRPC
+Type-safe API aggregation layer
+L5 — Services
+Microservices
+Node.js on AWS EKS (K8s)
+Bounded domain services (6 core)
+L6 — AI Orchestrator
+AI pipeline
+LangChain + Anthropic API
+Document gen, research, summarisation
+L7 — Document Engine
+Legal doc service
+Custom PDF engine + SHCIL + Aadhaar eSign
+Complete legally valid document production
+L8 — Primary DB
+OLTP store
+PostgreSQL 16 (RDS Multi-AZ, Mumbai)
+All structured data, row-level security
+L9 — Search
+Full-text + vector
+Elasticsearch 8.x (3-node private cluster)
+Case law, lawyer, document search
+L10 — File Store
+Object storage
+AWS S3 (ap-south-1) + KMS
+Encrypted document vault
+L11 — Cache
+Session + API cache
+Redis (ElastiCache, cluster mode)
+Sessions, cause list cache, rate counters
+L12 — Queue
+Async jobs
+AWS SQS + Lambda workers
+OCR, email/SMS, reminders, doc gen jobs
+L13 — Event Bus
+System events
+AWS EventBridge
+Audit events, cross-service communication
+L14 — Secrets
+Key management
+HashiCorp Vault (self-hosted on EKS)
+DB creds, API keys, encryption keys
+L15 — DR
+Disaster recovery
+AWS ap-south-2 (Hyderabad)
+RDS read replica, S3 cross-region replication
+1.3  The Six Core Microservices
+Service
+Responsibility
+DB Schema
+Exposes
+identity-svc
+Auth, KYC, BCI verify, sessions, MFA
+users, sessions, kyc_records
+POST /auth/*, GET /me
+workspace-svc
+Lawyer CRM, hearings, notes, billing, matters
+matters, clients, hearings, invoices, notes
+REST + WebSocket
+vault-svc
+Document upload, versioning, ACL, e-sign, e-stamp
+documents, versions, access_logs, stamps
+REST + presigned S3 URLs
+court-svc
+Case ingestion, eCourts sync, cause list, NJDG
+cases, courts, orders, cause_lists, hearings
+REST + SSE for live updates
+docgen-svc
+Legal document generation, stamp duty calc, workflow
+doc_requests, templates, stamp_orders
+REST + async job queue
+search-svc
+Lawyer directory, case law search, statute index
+Elasticsearch indexes (no PG tables)
+REST GraphQL-style query API
+1.4  Data Flow — End to End
+Request: Lawyer generates a Rent Agreement for a client
+Step
+Where
+What Happens
+1
+Frontend (Next.js)
+Lawyer fills guided form: parties, property, rent, duration, state
+2
+BFF Layer
+tRPC mutation → validates input → forwards to docgen-svc
+3
+docgen-svc
+Selects template, calculates stamp duty (state-specific rule engine)
+4
+AI Orchestrator
+Claude API fills template with inputs, flags unusual clauses
+5
+SHCIL API
+Stamp duty paid online → e-stamp certificate with UIN fetched
+6
+Aadhaar eSign API
+Both parties receive OTP → sign via mobile → PKI signature embedded
+7
+PDF Engine
+Final PDF assembled: document + e-stamp + digital signatures + audit trail
+8
+vault-svc
+PDF stored in S3 (AES-256 encrypted) → linked to client matter
+9
+Response
+Lawyer gets complete, court-admissible document — not a draft
+02  |  The Legal Document Engine — Complete Documents, Not Drafts
+This is the most critical differentiation of Nyay-Mitra. When a user completes a document workflow, they receive a document that is legally complete, executed, stamped, signed, and admissible in court — without any 'DRAFT' label or need for a separate lawyer review step for standard documents. Here is exactly how this works.
+2.1  Why 'Draft' Is Not Acceptable — The Full Service Model
+Existing platforms like LegalDesk and Vakil No1 generate template-filled Word documents or PDFs labelled as drafts. The user still has to: (a) buy stamp paper separately, (b) print and sign physically, and (c) get it notarised or registered if needed. Nyay-Mitra eliminates all these steps inside one workflow.
+Step
+Old Way (Other Platforms)
+Nyay-Mitra
+Template fill
+Fill form → Word/PDF generated
+Fill guided form → AI-assisted generation with clause logic
+Legal review
+User must take to a lawyer
+In-platform lawyer review option for complex docs (paid, 30 min)
+Stamp duty
+User buys physical stamp paper separately
+Auto-calculated + SHCIL e-stamp procured inside platform
+Execution / Signing
+Print → sign with pen → scan
+Aadhaar eSign via OTP for all parties — fully digital
+Delivery
+Download a PDF template
+Court-admissible PDF: document + e-stamp + digital signatures + audit trail
+Status
+DRAFT — take to a lawyer
+Complete executed instrument — enforceable under Indian Contract Act
+2.2  What Makes a Document Legally Complete in India
+Legal Validity Framework
+Under Indian law, a document is legally complete when: (1) it is on appropriate stamp paper of correct value — Indian Stamp Act 1899, (2) it is signed by all parties — IT Act 2000 Section 5 accepts Aadhaar eSign, (3) it is witnessed where required, (4) it is registered at Sub-Registrar where required (property deeds, some leases). Nyay-Mitra handles 1, 2, and 3 fully in-platform. For registration (4), the platform guides users and generates the e-registration application.
+Component 1 — Stamp Duty Engine
+Every Indian state has different stamp duty rates for different document types. The engine implements all state-specific rules:
+State × Document Type → Duty Rate lookup table (maintained in PostgreSQL, updated on gazette notifications)
+Duty calculation: percentage of transaction value OR fixed amount, whichever applies per state law
+SHCIL e-stamp API integration: platform pays SHCIL, receives e-stamp certificate with Unique Identification Number (UIN)
+E-stamp is tied to the document: UIN + party names + purpose printed on stamp certificate, linked to document hash
+Verification: anyone can verify the e-stamp via SHCIL portal using the UIN — tamper-proof
+// Stamp Duty Engine — Core Logic (Node.js)
+async function calculateStampDuty(docType, state, transactionValue) {
+  const rule = await db.stampRules.findOne({ docType, state });
+  if (rule.basis === 'PERCENTAGE') {
+    return Math.ceil(transactionValue * rule.rate / 100);
+  } else if (rule.basis === 'FIXED') {
+    return rule.fixedAmount;
+  } else if (rule.basis === 'SLAB') {
+    return rule.slabs.find(s => transactionValue >= s.min && transactionValue < s.max).duty;
+  }
+}
+
+async function procureEStamp(duty, docType, state, party1, party2) {
+  const res = await shcilAPI.post('/estamp/procure', {
+    duty_amount: duty, state_code: state, document_type: docType,
+    first_party: party1, second_party: party2,
+    purpose: DOCUMENT_PURPOSE_MAP[docType]
+  });
+  return { uin: res.data.uin, certificate_url: res.data.cert_url, txn_id: res.data.txn_id };
+}
+Component 2 — Aadhaar eSign Integration
+Aadhaar eSign under IT Act 2000 Section 3A is legally equivalent to a wet (ink) signature. It is the most accessible digital signing method in India — requires only an Aadhaar-linked mobile number.
+Provider: Signzy or Digio (both NSDL-licensed ASPs — Application Service Providers) — REST API
+Flow: Nyay-Mitra sends document hash (not full document) to eSign API → signer receives OTP on Aadhaar-linked mobile → OTP entered → DSC (Digital Signature Certificate) issued by NSDL → signature embedded in PDF
+The document itself never leaves Nyay-Mitra servers — only the SHA-256 hash is sent to the eSign provider
+Every signature produces: cryptographic signature, timestamp, signer's Aadhaar-verified identity, audit trail from UIDAI
+Admissible in court under Indian Evidence Act 1872, Section 65B
+// eSign Flow — docgen-svc (Node.js)
+async function initiateESign(documentId, signerAadhaar, signerMobile) {
+  const doc = await vault.getDocument(documentId);
+  const hash = crypto.createHash('sha256').update(doc.buffer).digest('hex');
+
+  const session = await signzyAPI.post('/esign/initiate', {
+    document_hash: hash,
+    document_id: documentId,
+    signer_aadhaar: signerAadhaar, // Only last 4 digits stored post-signing
+    signer_mobile: signerMobile,
+    signing_reason: 'Agreement execution',
+    callback_url: `${BASE_URL}/webhooks/esign/${documentId}`
+  });
+
+  return session.data.signing_url; // Redirect user to this URL for OTP entry
+}
+
+async function onESignComplete(documentId, signatureData) {
+  // Embed cryptographic signature into PDF
+  const signedPdf = await pdfEngine.embedSignature(documentId, {
+    signature_bytes: signatureData.pkcs7_signature,
+    certificate: signatureData.dsc_certificate,
+    timestamp: signatureData.signed_at,
+    signer_name: signatureData.verified_name // From Aadhaar eKYC
+  });
+  await vault.storeDocument(documentId, signedPdf, { status: 'EXECUTED' });
+}
+Component 3 — PDF Assembly Engine
+The final PDF is assembled as a legally structured document — not a plain PDF. It includes:
+Page 1: E-stamp certificate (SHCIL-issued, with UIN and QR code for verification)
+Pages 2–N: The document body, formatted per document type conventions
+Signature page: Each party's Aadhaar eSign with timestamp, name, and DSC reference
+Audit trail page: Complete event log — who initiated, who signed, when, from which IP, OTP verified
+Embedded metadata: Document hash, UIN, all signer certificate hashes — invisible but verifiable
+QR code on every page linking to Nyay-Mitra verification portal — anyone can verify authenticity
+Registration-Required Documents
+Property sale deeds, long-term leases (>11 months in most states), and gift deeds require registration at Sub-Registrar office under Registration Act 1908 — this cannot be done digitally yet. For these documents, Nyay-Mitra generates a complete stamped and signed document AND books the Sub-Registrar appointment. The user still visits once — but with a complete, correct document. All other documents (agreements, affidavits, NDAs, employment contracts, etc.) are complete without registration.
+2.3  Document Template Architecture
+Template Structure
+Each document type is defined by a JSON schema that drives the guided form, validation rules, clause selection, and PDF rendering:
+// Template Definition — Rent Agreement (Maharashtra)
+{
+  "template_id": "rent-agreement-mh",
+  "display_name": "Rent / Leave & Licence Agreement",
+  "category": "PROPERTY",
+  "states": ["MH"],
+  "requires_registration": false, // < 11 months
+  "stamp_duty_rule": "MH_RENT_AGREEMENT",
+  "witness_count": 2,
+  "parties": [
+    { "role": "LICENSOR", "label": "Landlord / Owner", "esign_required": true },
+    { "role": "LICENSEE", "label": "Tenant", "esign_required": true }
+  ],
+  "form_fields": [
+    { "id": "property_address", "label": "Property Address", "type": "address", "required": true },
+    { "id": "monthly_rent", "label": "Monthly Rent (₹)", "type": "number", "required": true },
+    { "id": "deposit", "label": "Security Deposit (₹)", "type": "number", "required": true },
+    { "id": "duration_months", "label": "Duration (months)", "type": "number", "max": 11 },
+    { "id": "commencement", "label": "Start Date", "type": "date", "required": true },
+    { "id": "notice_period_days", "label": "Notice Period (days)", "type": "number", "default": 30 }
+  ],
+  "clauses": [
+    { "id": "rent_clause", "required": true, "variables": ["monthly_rent", "commencement"] },
+    { "id": "deposit_clause", "required": true, "variables": ["deposit"] },
+    { "id": "termination_clause", "required": true, "variables": ["notice_period_days"] },
+    { "id": "maintenance_clause", "optional": true, "ai_suggested": true }
+  ],
+  "ai_review": {
+    "flag_if": ["notice_period < 15", "deposit > 6 months rent"],
+    "suggest": ["maintenance responsibilities", "lock-in period"]
+  }
+}
+2.4  Document Categories — What Is Fully Supported
+Category
+Documents
+Registration?
+eSign Method
+Stamp Required
+Rental / Property
+Leave & Licence, Rent Agreement, PG Agreement
+No (< 11 mo)
+Aadhaar eSign
+Yes — state specific
+Employment
+Offer Letter, Appointment Letter, NDA, Non-Compete
+No
+Aadhaar eSign
+No
+Business
+Partnership Deed, LLP Supplement, Vendor Agreement
+Partnership: Yes
+Aadhaar eSign / DSC
+Yes
+Corporate
+Board Resolution, Share Transfer, MoU, Term Sheet
+No
+DSC (Class 3)
+Nominal
+Financial
+Loan Agreement, Mortgage (partial), Promissory Note
+Mortgage: Yes
+Aadhaar eSign
+Yes — value-based
+Legal Notices
+Legal Notice, Cheque Bounce Notice (138 NI Act)
+No
+Advocate DSC
+No
+Affidavits
+General Affidavit, Income Affidavit, Heirship
+No — Notarised
+Aadhaar eSign + Notary
+Judicial stamp
+IP & Startup
+Co-Founder Agreement, ESOP Plan, IP Assignment
+No
+Aadhaar eSign
+Nominal
+Consumer
+Complaint Draft, RTI Application, Consumer Notice
+No
+Aadhaar eSign
+No
+2.5  Affidavit Notarisation — Completing the Loop
+Affidavits require a Notary's seal — which cannot be done digitally under current Indian law. Nyay-Mitra's solution:
+Platform generates the affidavit on correct judicial stamp paper value
+Aadhaar eSign applied by deponent before printing
+Platform shows nearest empanelled Notary from the Nyay-Mitra Notary Network
+Notary can also be on-platform — book 15-min video call appointment, Notary applies their DSC-based seal
+States where video-notarisation is accepted: Maharashtra, Delhi, Karnataka (growing list)
+Legal Standing of Video Notarisation
+The Registration (Amendment) Act 2025 and individual state amendments are progressively enabling video-based document registration and notarisation. Nyay-Mitra will track state-by-state status and auto-enable video notarisation as states adopt it. Currently: Maharashtra and Delhi permit it for some document categories.
+03  |  Database Design — Schema, Courts, Cases, Lawyers
+Every table in Nyay-Mitra's database is designed with three constraints in mind: multi-tenancy (row-level security per tenant), audit trail (every write is logged), and DPDP compliance (personal data fields are encrypted at column level).
+3.1  Core Schema — Identity & Users
+-- Users table (all user types)
+CREATE TABLE users (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     UUID NOT NULL REFERENCES tenants(id), -- org/firm for B2B; self for B2C
+  email         TEXT UNIQUE NOT NULL,
+  phone_enc     BYTEA, -- AES-256-GCM encrypted
+  full_name_enc BYTEA, -- AES-256-GCM encrypted
+  user_type     ENUM('CITIZEN','ADVOCATE','STUDENT','ORG_ADMIN','PLATFORM_ADMIN'),
+  kyc_level     ENUM('NONE','PHONE_OTP','AADHAAR','BCI_VERIFIED') DEFAULT 'NONE',
+  aadhaar_ref   TEXT, -- Only last 4 digits stored; not full number
+  bci_number    TEXT, -- Bar Council enrollment number
+  bci_verified  BOOLEAN DEFAULT FALSE,
+  bci_state     TEXT, -- State Bar Council
+  is_active     BOOLEAN DEFAULT TRUE,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Row-level security: users see only their own tenant's data
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY users_tenant_isolation ON users
+  USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
+3.2  Lawyer Workspace Schema
+-- Client matters (cases/matters handled by the advocate)
+CREATE TABLE matters (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      UUID NOT NULL,
+  advocate_id    UUID NOT NULL REFERENCES users(id),
+  client_id      UUID NOT NULL REFERENCES clients(id),
+  title          TEXT NOT NULL,
+  matter_type    TEXT, -- 'CIVIL','CRIMINAL','CORPORATE','FAMILY',etc.
+  court_code     TEXT REFERENCES courts(court_code),
+  case_number    TEXT, -- Official court case number
+  filing_date    DATE,
+  status         ENUM('ACTIVE','DISPOSED','STAYED','WITHDRAWN') DEFAULT 'ACTIVE',
+  description_enc BYTEA, -- Encrypted matter description
+  fees_agreed    NUMERIC(12,2),
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Hearings diary
+CREATE TABLE hearings (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  matter_id     UUID NOT NULL REFERENCES matters(id),
+  scheduled_at  TIMESTAMPTZ NOT NULL,
+  court_code    TEXT,
+  court_hall    TEXT,
+  judge_name    TEXT,
+  status        ENUM('UPCOMING','HEARD','ADJOURNED','PART_HEARD') DEFAULT 'UPCOMING',
+  next_date     DATE, -- Filled after hearing
+  order_summary TEXT, -- What happened at the hearing
+  ecourts_sync  BOOLEAN DEFAULT FALSE, -- Was this synced from eCourts?
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Billing
+CREATE TABLE invoices (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  matter_id       UUID REFERENCES matters(id),
+  advocate_id     UUID NOT NULL REFERENCES users(id),
+  client_id       UUID NOT NULL REFERENCES clients(id),
+  invoice_number  TEXT UNIQUE NOT NULL,
+  amount          NUMERIC(12,2) NOT NULL,
+  gst_amount      NUMERIC(12,2),
+  total_amount    NUMERIC(12,2) NOT NULL,
+  status          ENUM('DRAFT','SENT','PAID','OVERDUE') DEFAULT 'DRAFT',
+  due_date        DATE,
+  paid_at         TIMESTAMPTZ,
+  razorpay_ref    TEXT, -- Payment gateway reference
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+3.3  Court & Case Database Schema
+-- Courts master — all tiers
+CREATE TABLE courts (
+  court_code      TEXT PRIMARY KEY, -- e.g. 'SC','MH-BHC','MH-PUNE-DC'
+  court_name      TEXT NOT NULL,
+  court_tier      ENUM('SUPREME','HIGH','DISTRICT','TAHSIL','TRIBUNAL'),
+  state_code      TEXT, -- NULL for Supreme Court
+  district_code   TEXT, -- NULL for SC/HC
+  ecourts_id      TEXT, -- eCourts system identifier
+  njdg_enabled    BOOLEAN DEFAULT FALSE, -- On NJDG data feed
+  website_url     TEXT,
+  address         TEXT,
+  is_active       BOOLEAN DEFAULT TRUE
+);
+
+-- Cases — ingested from all courts
+CREATE TABLE cases (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  court_code      TEXT NOT NULL REFERENCES courts(court_code),
+  case_number     TEXT NOT NULL,
+  case_type       TEXT, -- 'WP','CRL','CS','CA',etc.
+  year            INTEGER,
+  petitioner_enc  BYTEA, -- Encrypted — party names are PII
+  respondent_enc  BYTEA,
+  filing_date     DATE,
+  disposal_date   DATE,
+  status          ENUM('PENDING','DISPOSED','DISMISSED','ALLOWED','TRANSFERRED'),
+  next_hearing    DATE,
+  bench           TEXT, -- Judge(s) names
+  subject         TEXT, -- Legal subject matter
+  acts_involved   TEXT[], -- IPC s.302, CPC O.39 R.1, etc.
+  source          TEXT, -- 'ECOURTS','INDIANKANOON','MANUAL','SCRAPER'
+  es_indexed      BOOLEAN DEFAULT FALSE, -- Elasticsearch indexed
+  full_text_url   TEXT, -- S3 URL of full judgment PDF
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (court_code, case_number, year)
+);
+
+-- Indexes for common query patterns
+CREATE INDEX idx_cases_court_year ON cases(court_code, year);
+CREATE INDEX idx_cases_status ON cases(status);
+CREATE INDEX idx_cases_next_hearing ON cases(next_hearing) WHERE status='PENDING';
+CREATE INDEX idx_cases_acts ON cases USING GIN(acts_involved);
+3.4  Lawyer Directory Schema
+-- Advocate profiles (public directory + private workspace)
+CREATE TABLE advocate_profiles (
+  user_id           UUID PRIMARY KEY REFERENCES users(id),
+  bci_number        TEXT UNIQUE NOT NULL,
+  enrollment_date   DATE,
+  state_bar_council TEXT NOT NULL, -- 'BCI-MH','BCI-DL', etc.
+  cop_expiry        DATE, -- Certificate of Practice expiry
+  cop_status        ENUM('VALID','EXPIRED','SUSPENDED','CANCELLED') DEFAULT 'VALID',
+  practice_areas    TEXT[], -- ['CRIMINAL','CIVIL','CORPORATE',...] max 5
+  courts_regular    TEXT[], -- court_codes of courts regularly appearing in
+  languages         TEXT[], -- ['HINDI','ENGLISH','MARATHI',...]
+  years_practice    INTEGER,
+  about_text        TEXT, -- Public bio
+  fee_consultation  NUMERIC(8,2), -- Consultation fee
+  is_public         BOOLEAN DEFAULT TRUE, -- Visible in directory
+  profile_complete  INTEGER DEFAULT 0, -- % completion score
+  verified_at       TIMESTAMPTZ, -- When BCI was verified
+  -- Location
+  city              TEXT,
+  district          TEXT,
+  state_code        TEXT,
+  lat               NUMERIC(9,6),
+  lng               NUMERIC(9,6)
+);
+
+-- Stamp duty rules table — updated from gazette notifications
+CREATE TABLE stamp_duty_rules (
+  id              SERIAL PRIMARY KEY,
+  state_code      TEXT NOT NULL,
+  doc_type        TEXT NOT NULL,
+  basis           ENUM('PERCENTAGE','FIXED','SLAB'),
+  rate            NUMERIC(6,4), -- e.g. 0.5 = 0.5%
+  fixed_amount    NUMERIC(10,2),
+  min_duty        NUMERIC(10,2),
+  max_duty        NUMERIC(10,2),
+  effective_from  DATE NOT NULL,
+  gazette_ref     TEXT, -- Gazette notification reference
+  UNIQUE(state_code, doc_type, effective_from)
+);
+04  |  API Design — Every Endpoint, Input, Output
+Nyay-Mitra uses REST for external-facing APIs and tRPC (TypeScript-native RPC) for internal frontend-backend communication. All APIs are versioned (/v1/), JWT-authenticated, and rate-limited. Below are the critical endpoint groups.
+4.1  Authentication API — /v1/auth
+Method
+Endpoint
+Input
+Output
+Auth
+POST
+/v1/auth/send-otp
+{ mobile }
+{ otp_token, expires_in }
+None
+POST
+/v1/auth/verify-otp
+{ otp_token, otp }
+{ access_token, refresh_token, user }
+None
+POST
+/v1/auth/refresh
+{ refresh_token }
+{ access_token, refresh_token }
+None
+POST
+/v1/auth/bci-verify
+{ bci_number, state_council }
+{ verified, advocate_name, cop_status }
+JWT
+POST
+/v1/auth/aadhaar-kyc
+{ aadhaar_last4, otp_token }
+{ kyc_level: 'AADHAAR', name_masked }
+JWT
+POST
+/v1/auth/logout
+{}
+{ success }
+JWT
+DELETE
+/v1/auth/account
+{ reason }
+{ deletion_scheduled_at }
+JWT + MFA
+4.2  Document Generation API — /v1/docgen
+Method
+Endpoint
+Input
+Output
+Notes
+GET
+/v1/docgen/templates
+{ category?, state? }
+[ templates[] ]
+Public — no auth needed
+GET
+/v1/docgen/templates/:id
+{}
+Template schema + form fields
+Public
+POST
+/v1/docgen/stamp-duty/calculate
+{ template_id, state, transaction_value }
+{ duty_amount, basis, rule_ref }
+JWT
+POST
+/v1/docgen/requests
+{ template_id, form_data, matter_id? }
+{ request_id, status:'GENERATING' }
+JWT — async job
+GET
+/v1/docgen/requests/:id
+{}
+{ status, preview_url?, error? }
+JWT — poll for completion
+POST
+/v1/docgen/requests/:id/pay-stamp
+{ payment_method }
+{ stamp_uin, payment_ref }
+JWT — triggers SHCIL API
+POST
+/v1/docgen/requests/:id/esign/initiate
+{ signer_role, aadhaar_mobile }
+{ signing_url }
+JWT — triggers Aadhaar eSign
+GET
+/v1/docgen/requests/:id/final
+{}
+{ document_url, audit_trail }
+JWT — after all signs
+POST
+/v1/docgen/requests/:id/share
+{ recipient_email }
+{ share_link }
+JWT
+4.3  Court Data API — /v1/courts
+Method
+Endpoint
+Input
+Output
+Notes
+GET
+/v1/courts
+{ tier?, state? }
+[ courts[] ]
+Public — full list
+GET
+/v1/courts/:court_code/cases
+{ case_number, year }
+{ case_detail, hearings[], orders[] }
+Public
+GET
+/v1/courts/:court_code/causelist
+{ date }
+[ cause_list_items[] ]
+Public — cached 30 min
+POST
+/v1/courts/track
+{ court_code, case_number, year }
+{ tracking_id }
+JWT — citizen tracking
+GET
+/v1/courts/tracked
+{}
+[ tracked_cases[] with status ]
+JWT
+GET
+/v1/cases/search
+{ query, court?, year?, acts? }
+{ results[], total }
+JWT — Elasticsearch
+GET
+/v1/cases/:id/judgment
+{}
+{ pdf_url } or { text_content }
+JWT — for full judgment
+4.4  Lawyer Workspace API — /v1/workspace
+Method
+Endpoint
+Input
+Output
+Notes
+GET
+/v1/workspace/matters
+{ status?, client_id? }
+[ matters[] ]
+JWT — Advocate only
+POST
+/v1/workspace/matters
+{ client_id, title, court_code, case_number }
+{ matter }
+JWT — Advocate only
+GET
+/v1/workspace/hearings
+{ from, to, matter_id? }
+[ hearings[] ]
+JWT — calendar view
+POST
+/v1/workspace/hearings/:id/update
+{ status, next_date, order_summary }
+{ hearing }
+JWT — after court
+GET
+/v1/workspace/hearings/sync-ecourts
+{ matter_id }
+{ synced_count, new_dates[] }
+JWT — pulls from eCourts
+POST
+/v1/workspace/invoices
+{ matter_id, line_items[], due_date }
+{ invoice, pdf_url }
+JWT
+POST
+/v1/workspace/invoices/:id/send
+{ delivery_method }
+{ sent_at }
+JWT — WhatsApp/email
+GET
+/v1/workspace/dashboard
+{}
+{ active_matters, upcoming_hearings, pending_fees }
+JWT
+4.5  Lawyer Directory API — /v1/lawyers
+Method
+Endpoint
+Input
+Output
+Notes
+GET
+/v1/lawyers
+{ practice_area?, state?, district?, language?, query? }
+{ lawyers[], total }
+Public — paginated
+GET
+/v1/lawyers/:id
+{}
+{ full_profile, reviews_summary }
+Public
+POST
+/v1/lawyers/:id/book
+{ slot_id, matter_description }
+{ booking_id, meeting_url }
+JWT — citizen
+GET
+/v1/lawyers/me/profile
+{}
+{ full_profile }
+JWT — Advocate
+PUT
+/v1/lawyers/me/profile
+{ practice_areas, about, fee_consultation }
+{ updated_profile }
+JWT — Advocate
+POST
+/v1/lawyers/me/availability
+{ slots[] }
+{ created }
+JWT — Advocate
+API Rate Limits
+Public endpoints: 60 req/min per IP. Authenticated citizens: 300 req/min. Advocates: 600 req/min. Document generation: 10 concurrent jobs per tenant. AI endpoints: 20 req/min per user (cost protection). All limits enforced at Cloudflare Workers layer before reaching origin.
+05  |  Security Architecture — Zero Compromise
+Legal data is among the most sensitive data in existence. Breach of attorney-client communications can destroy cases, end careers, and put people in prison. The security architecture is designed assuming that every layer will be attacked.
+5.1  Encryption Architecture
+Data Type
+Encryption
+Key Holder
+Notes
+PII (name, phone, Aadhaar ref)
+AES-256-GCM field-level
+HashiCorp Vault per-tenant key
+Never in plaintext in DB
+Document files (S3)
+AES-256 via AWS KMS
+Tenant-specific KMS key
+Key rotated every 90 days
+Attorney-client privileged comms
+AES-256-GCM end-to-end
+Client-side key — server has zero access
+Optional; advocate-client must both opt in
+Session tokens
+HMAC-SHA256 signed JWT
+Platform signing key (RSA-4096)
+15-min access token; 7-day refresh with rotation
+Backup data
+AES-256 via separate KMS key
+Isolated from production key
+Separate key prevents backup-based breach
+Audit logs
+Signed with platform DSC
+Immutable S3 with Object Lock
+Tamper-evident; required for legal discovery
+eSign document hash
+SHA-256
+Sent to Aadhaar eSign provider
+Full document never leaves platform
+5.2  Authentication & Access Control
+Multi-Factor Authentication Rules
+All advocate accounts: MFA mandatory — TOTP (Google Authenticator) or OTP on Aadhaar-linked mobile
+Org admin accounts: MFA mandatory — hardware key (YubiKey) or TOTP
+Citizen accounts: MFA optional for browsing; required before document download or payment
+Failed MFA: 5 attempts → 15-minute lockout → alert to registered email/mobile
+Session anomaly detection: new device, new geography, or rapid IP change → force re-auth
+Role-Based Access Control (RBAC) Matrix
+Resource
+Citizen
+Advocate
+Firm Admin
+Org Admin
+Platform Admin
+Lawyer directory
+Read
+Read + Edit own
+Read
+Read
+Full
+Client matters
+None
+Own only
+Firm-wide
+None
+Read-only audit
+Document vault
+Own docs
+Own + client docs
+Firm-wide
+Org-wide
+Audit only
+Court data / case search
+Read
+Read + track
+Read + track
+Read
+Full
+Billing / invoices
+Pay only
+Own invoices
+Firm-wide
+None
+Audit
+User management
+None
+None
+Firm users
+Org users
+All users
+AI features
+Limited
+Full
+Full
+Document gen only
+Full
+Audit logs
+Own activity
+Own + client
+Firm-wide
+Org-wide
+All
+5.3  AI Security Guardrails
+Guardrail
+Implementation
+Why
+No client PII in AI prompts
+Strip/pseudonymise names before Claude API call; add back in post-processing
+DPDP compliance; data minimisation
+No outcome prediction to clients
+Block any prompt asking 'will I win?' from citizen-facing endpoints
+Prevents legal advice; unrealistic expectations
+Advocate-only AI features
+BCI-verified JWT claim checked on all AI drafting endpoints
+Unverified users cannot generate legal notices
+AI output logging
+Every AI-generated document logged with prompt hash and model version
+Audit trail; post-breach forensics
+Self-hosted model option
+Llama 3.1 on platform GPU for 'Air-gap mode' — no external API
+For highly sensitive matters; advocate choice
+Prompt injection prevention
+System prompt hardened; user inputs sanitised; output validation
+Prevent jailbreak via uploaded documents
+Human review flag
+AI auto-flags non-standard clauses for advocate review before eSign
+Legal accuracy; professional responsibility
+5.4  Incident Response Playbook
+Severity
+Definition
+Detection SLA
+Containment SLA
+CERT-In Notification
+User Notification
+P0 — Critical
+Breach of client data or cryptographic keys
+15 minutes
+1 hour
+Within 6 hours (mandatory)
+Within 72 hours
+P1 — High
+Unauthorised access, privilege escalation, data exfiltration
+30 minutes
+4 hours
+Within 6 hours if PII affected
+Within 72 hours
+P2 — Medium
+Failed intrusion attempt, anomalous access pattern
+2 hours
+24 hours
+Within 7 days if reportable
+At discretion
+P3 — Low
+Policy violation, failed auth spike, CVE in dependency
+24 hours
+72 hours
+Not required
+Not required
+06  |  Development Phases — Sprint-by-Sprint Roadmap
+The development is structured into 4 phases over 18 months. Each phase produces a shippable, usable product — no big-bang release. Revenue starts from Phase 1.
+Phase 0 — Foundation (Weeks 1–6)  |  Team: 3 Engineers
+Infrastructure, Auth, Base Services — No user-facing features yet
+Week
+Task
+Deliverable
+Definition of Done
+W1
+AWS infra setup — VPC, EKS cluster, RDS, S3, KMS, Vault
+Infrastructure as code (Terraform)
+All resources deployed; security groups validated
+W1
+CI/CD pipeline — GitHub Actions → ECR → EKS
+Automated deployment pipeline
+Merge to main → deployed to staging in < 5 min
+W2
+identity-svc — mobile OTP auth, JWT, refresh tokens
+Auth service v1
+Login with mobile OTP; token refresh; logout working
+W2
+PostgreSQL schema — users, tenants, base tables
+DB schema v1
+Migrations run; RLS policies active; seed data
+W3
+BCI verification engine — OGD data import, BCI number lookup
+BCI verifier service
+1.7M advocate records imported; BCI check API working
+W3
+Cloudflare WAF + rate limiting + OWASP rules
+Security baseline
+WAF active; rate limits tested; pentest on auth flows
+W4
+HashiCorp Vault — secrets, dynamic DB creds
+Secrets management
+No hardcoded secrets anywhere in codebase; Vault audit log on
+W4
+Next.js frontend scaffold — auth pages, routing, design system
+Frontend shell v1
+Login flow end-to-end; design tokens; mobile responsive
+W5
+Court data seed — courts table, all 25 HC + SC + NJDG courts
+Courts master data
+All courts importable; eCourts API connection tested
+W5
+IndianKanoon API integration — search and document fetch
+Case search backend
+Search 3cr+ cases; full judgment fetch; Elasticsearch indexed
+W6
+Elasticsearch setup — cases index, lawyer index
+Search cluster
+Sub-200ms search on 3M case records; tested
+W6
+Phase 0 security audit — penetration test, VAPT scan
+Security report
+0 critical findings; P1s remediated before Phase 1
+Phase 1 — Lawyer MVP (Weeks 7–16)  |  Team: 5 Engineers + 1 Legal Expert
+The core lawyer workspace — this is the first shippable, billable product
+Week
+Feature
+Deliverable
+W7
+Client management — client intake form, KYC, client profile
+Clients CRUD + Aadhaar OTP verify
+W7
+Matter management — create matter, link client, court, case number
+Matters CRUD + court linkage
+W8
+Hearing diary — create hearing, calendar view, WhatsApp reminder
+Hearing module + Twilio/MSG91 WhatsApp
+W8
+eCourts cause list sync — pull next date automatically
+eCourts API integration + daily cron
+W9
+Case notes — rich text notes, key points board, tagging
+Notes editor (Tiptap) + PostgreSQL
+W9
+Document vault — upload, tag, version, share docs
+S3 + vault-svc + presigned URLs
+W10
+Case law research — semantic search, landmark library
+InLegalBERT + FAISS + ES hybrid search
+W10
+Lawyer directory — public profile, BCI badge, practice areas
+Public profiles; directory search
+W11
+Billing — time tracker, invoice generator, GST invoice PDF
+Invoices + PDF generation + Razorpay
+W11
+WhatsApp invoice delivery + UPI payment link
+Razorpay payment link in WhatsApp msg
+W12
+Mobile app — React Native — diary, hearings, notes, vault
+iOS + Android app on stores
+W12-16
+Beta with 50 advocate partners — feedback, bug fix, iteration
+Beta programme with metrics
+Phase 2 — Document Engine (Weeks 17–26)  |  Team: 6 Engineers + 1 Lawyer + 1 CA
+Complete legal document generation — stamp + sign + deliver. The core differentiator.
+Week
+Feature
+Key Integration
+W17
+Template engine — JSON schema + Handlebars rendering + PDF output
+Template library v1 (10 doc types)
+W18
+Stamp duty rule engine — all states, all doc types
+PostgreSQL rules table + gazette monitoring
+W18
+SHCIL e-stamp API integration — test sandbox + production
+SHCIL developer API (B2B agreement needed)
+W19
+Aadhaar eSign integration — Signzy or Digio ASP
+eSign API sandbox → OTP sign flow end-to-end
+W19
+PDF assembly — e-stamp + document + signatures + audit trail
+pdf-lib or PDFKit + cryptographic embedding
+W20
+Guided form UI — smart fields, clause selection, validation
+Next.js multi-step form with progress
+W20
+AI clause suggestion — Claude API + legal review flag
+Anthropic API integration + clause library
+W21
+Rent agreement — MH, DL, KA, TN (4 states)
+Complete flow including eStamp + eSign
+W21
+Employment documents — offer letter, NDA, non-compete
+All employment doc types, no stamp needed
+W22
+Legal notice + Section 138 cheque bounce notice
+Advocate DSC integration for signing
+W22
+Affidavit + Notary network integration
+Empanelled notary directory + video call booking
+W23
+Corporate: board resolution, MoU, term sheet
+DSC (Class 3) for corporate signatories
+W23–26
+25 more document types; state coverage expansion; QA
+Full regression suite; legal review by empanelled advocates
+Phase 3 — Citizen Portal + Scale (Weeks 27–40)
+Public launch — citizens, students, orgs. Full platform live.
+Feature
+Description
+Tech
+Citizen case tracker
+Case status, order viewing, WhatsApp bot
+eCourts API + Twilio WhatsApp Business
+Lawyer finder for citizens
+Search by area, language, fee range, availability
+Elasticsearch + booking calendar
+Know your rights module
+Plain-language rights by situation, in 12 languages
+InLegalBERT + Claude API + i18n
+NALSA legal aid locator
+Find free legal aid offices near user
+NALSA data + Google Maps API
+Law student workspace
+Research, moot tools, AIBE prep, IPC→BNS tool
+Separate student features behind student plan
+Org / Corporate suite
+Digital folder, employee docs, bulk doc generation
+Tenant management + org hierarchy
+Voice interface — Hindi + English
+Voice queries, dictation for lawyers
+Whisper self-hosted + Azure TTS
+Analytics dashboard
+Matter velocity, hearing stats, billing reports
+PostgreSQL + Chart.js
+DPDP compliance portal
+User rights: access, correct, delete data
+Consent manager + deletion workflows
+Payments — subscription billing
+Stripe India or Razorpay subscriptions
+Subscription management + invoicing
+07  |  Infrastructure & DevOps
+7.1  Kubernetes Deployment — Pod Architecture
+# Core service deployment spec (simplified)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docgen-svc
+  namespace: nyaymitra-prod
+spec:
+  replicas: 3  # Minimum; HPA scales to 15 during business hours
+  selector:
+    matchLabels: { app: docgen-svc }
+  template:
+    spec:
+      containers:
+      - name: docgen-svc
+        image: ${ECR_REGISTRY}/docgen-svc:${VERSION}
+        resources:
+          requests: { memory: '512Mi', cpu: '250m' }
+          limits:   { memory: '1Gi',   cpu: '1000m' }
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef: { name: vault-secrets, key: docgen-db-url }
+        livenessProbe:
+          httpGet: { path: /health, port: 3000 }
+          periodSeconds: 10
+        readinessProbe:
+          httpGet: { path: /ready, port: 3000 }
+          periodSeconds: 5
+7.2  Monitoring & Observability
+What
+Tool
+Alert Threshold
+API error rate
+Datadog APM
+Alert if > 1% 5xx in 5 min window
+API latency P99
+Datadog APM
+Alert if P99 > 3s for any endpoint
+DB connection pool
+pgBouncer + Datadog
+Alert if pool utilisation > 80%
+Elasticsearch health
+Datadog integration
+Alert on RED cluster status or disk > 80%
+Queue depth (SQS)
+CloudWatch
+Alert if > 1000 messages older than 5 min
+Security events
+AWS GuardDuty + CloudTrail
+Immediate PagerDuty alert on any GuardDuty HIGH finding
+Certificate expiry
+Cloudflare + Datadog
+Alert 30 days before any cert expiry
+Cost anomaly
+AWS Cost Anomaly Detection
+Alert if daily spend > 150% of 7-day average
+7.3  Environments & Release Strategy
+Environment
+Purpose
+Data
+Deploy Trigger
+Rollback
+Dev
+Individual developer sandbox
+Synthetic only
+Push to feature branch
+Immediate
+Staging
+Integration testing, QA, UAT
+Anonymised prod copy
+Merge to main branch
+Immediate
+Production
+Live users
+Real data (encrypted)
+Manual approve after staging sign-off
+Blue/green — instant
+08  |  Third-Party Integrations — Contracts, APIs, Costs
+8.1  Integration Contracts Required
+Partner
+What We Need
+How to Get It
+Estimated Cost
+Timeline
+SHCIL (eStamping)
+B2B API access for e-stamp procurement
+Direct commercial agreement with SHCIL
+0.5–1% of stamp value as platform fee
+4–8 weeks procurement
+Signzy / Digio (eSign)
+ASP API for Aadhaar eSign
+API agreement; UIDAI sub-ASP registration
+₹5–15 per eSign transaction
+2–4 weeks
+IndianKanoon
+Commercial API for 3cr+ cases
+API subscription — commercial tier
+₹10,000–₹50,000/month based on calls
+1 week (online signup)
+ECIAPI (eCourts)
+Court case status, cause lists
+Commercial API subscription
+Pay-per-request; est. ₹20,000/month
+1 week
+MSG91 / Twilio
+WhatsApp Business API, SMS OTP
+WhatsApp Business Account (Meta)
+₹0.5–1.1 per WhatsApp conv; ₹0.10 per SMS
+2–3 weeks for WhatsApp approval
+Razorpay
+Payment gateway — UPI, cards, net banking
+Razorpay Business Account + KYC
+2% + ₹3 per transaction
+3–5 days
+Signzy / DigiLocker
+Aadhaar eKYC + document fetch
+DigiLocker Partner API
+₹2–5 per eKYC call
+4–6 weeks (DigiLocker approval)
+AWS India (Mumbai + Hyderabad)
+Cloud infrastructure — all services
+AWS Business account
+Pay-per-use; est. ₹2–5 lakh/month at launch
+Immediate
+Anthropic (Claude API)
+AI document generation, clause review
+API key; enterprise agreement at scale
+$3–15 per million tokens
+Immediate
+Manupatra / SCC Online
+Premium case law data partnership
+Enterprise licensing — legal agreement
+₹5–20 lakh/year
+8–12 weeks negotiation
+8.2  Integration Architecture — Resilience Patterns
+Circuit breaker: every third-party API call wrapped in Opossum circuit breaker — if SHCIL API is down, queue stamp procurement and retry
+Fallback: eSign has two providers (Signzy primary, Digio fallback) — auto-switch on failure
+Idempotency: all document generation jobs have idempotency keys — safe to retry without double-charging
+Webhook verification: all incoming webhooks (eSign completion, payment) verified with HMAC signature
+Timeout budgets: SHCIL 10s, eSign 30s (user waiting for OTP), IndianKanoon 5s, Razorpay 15s
+Async everything: stamp procurement and eSign are async — user waits via polling or SSE push, not blocking HTTP
+8.3  Data Pipeline — Court Data Ingestion
+// Court data ingestion pipeline — Kafka consumer
+consumer.subscribe(['court.raw.ecourts', 'court.raw.indiankanoon']);
+
+async function processCourtRecord(record) {
+  const { source, court_code, case_data } = record;
+
+  // 1. Validate schema
+  const valid = validateCaseSchema(case_data);
+  if (!valid) { await quarantine(record); return; }
+
+  // 2. Deduplicate
+  const existing = await db.cases.findOne({ court_code, case_number: case_data.case_number, year: case_data.year });
+  if (existing) { await updateCase(existing.id, case_data); return; }
+
+  // 3. Extract entities (NER)
+  const entities = await nlpService.extractEntities(case_data.full_text);
+  // entities: { acts: ['IPC s.302','CrPC s.154'], judges: ['Hon. D.Y. Chandrachud'], ... }
+
+  // 4. Encrypt PII (party names)
+  const petitioner_enc = await vault.encrypt(case_data.petitioner);
+  const respondent_enc = await vault.encrypt(case_data.respondent);
+
+  // 5. Insert to PostgreSQL
+  const newCase = await db.cases.insert({ ...case_data, petitioner_enc, respondent_enc, acts_involved: entities.acts });
+
+  // 6. Index in Elasticsearch
+  await es.index({ index: 'cases', id: newCase.id, body: {
+    court_code, case_number: case_data.case_number, year: case_data.year,
+    subject: case_data.subject, acts: entities.acts, status: case_data.status,
+    full_text: case_data.full_text, // For full-text search
+    embedding: await nlp.embed(case_data.full_text?.substring(0, 1000)) // For semantic search
+  }});
+}
+Data Pipeline SLA
+Target: every new Supreme Court order indexed within 30 minutes of publication on sci.gov.in. Every new High Court order indexed within 2 hours. District court status synced every 6 hours via eCourts API. NJDG cause list refreshed every 30 minutes during court hours (10AM–5PM IST).
+न्याय मित्र — Nyay-Mitra
+Build it right. Build it complete. Build it for India.
+Every document complete  •  Every lawyer verified  •  Every citizen served  •  Every byte secured

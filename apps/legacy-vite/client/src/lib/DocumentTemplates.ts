@@ -1,0 +1,735 @@
+/**
+ * Official Government & Court Document Templates — Nyay Mitra
+ * 
+ * Each template returns a complete, print-ready HTML string in proper
+ * Indian government / court document format. Content slots are filled from
+ * the `fields` object (static template) or from `aiContent` (AI-generated body).
+ * 
+ * Design principles:
+ *  - A4 page dimensions (210mm × 297mm)
+ *  - Proper court/government typography (Times New Roman / serif)
+ *  - Correct margin widths matching official specifications
+ *  - Official headings, cause-title blocks, prayer sections
+ */
+
+export type DocumentType =
+  | "rti"
+  | "legal_notice"
+  | "bail_petition"
+  | "consumer_complaint"
+  | "affidavit"
+  | "founder_agreement"
+  | "esop_policy";
+
+const today = () =>
+  new Date().toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+/** Shared CSS for all print-ready documents */
+const BASE_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e0d5; display: flex; justify-content: center; padding: 32px 16px; min-height: 100vh; }
+  .page {
+    background: #fff;
+    width: 210mm;
+    min-height: 297mm;
+    padding: 25mm 20mm 20mm 30mm;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.18);
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 13pt;
+    line-height: 1.8;
+    color: #1a1a1a;
+    position: relative;
+  }
+  /* Print styles */
+  @media print {
+    body { background: white; padding: 0; }
+    .page { box-shadow: none; width: 100%; min-height: auto; padding: 20mm 25mm 20mm 30mm; }
+    .no-print { display: none !important; }
+  }
+  /* ── Document structure ── */
+  .doc-header { text-align: center; margin-bottom: 20pt; }
+  .doc-title { font-size: 14pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; text-align: center; text-decoration: underline; margin: 12pt 0 6pt; }
+  .doc-subtitle { font-size: 11pt; text-align: center; margin-bottom: 14pt; }
+  .doc-ref { font-size: 11pt; margin-bottom: 6pt; }
+  .court-name { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 6pt; margin-bottom: 10pt; }
+  .cause-title { border: 1px solid #000; padding: 10pt 14pt; margin: 10pt 0; }
+  .cause-title table { width: 100%; border-collapse: collapse; }
+  .cause-title td { vertical-align: top; padding: 2pt 6pt; font-size: 12pt; }
+  .cause-title .versus { text-align: center; font-weight: bold; font-size: 14pt; width: 40pt; }
+  .section-label { font-weight: bold; text-transform: uppercase; font-size: 11pt; margin: 14pt 0 4pt; letter-spacing: 0.5px; }
+  .para { margin-bottom: 10pt; text-align: justify; }
+  .para-num { font-weight: bold; margin-right: 8pt; }
+  .indent { padding-left: 20pt; }
+  .bold { font-weight: bold; }
+  .underline { text-decoration: underline; }
+  .center { text-align: center; }
+  .prayer-box { border: 1px solid #555; padding: 10pt 14pt; margin: 14pt 0; background: #fafafa; }
+  .sig-block { margin-top: 30pt; }
+  .sig-line { border-bottom: 1px solid #000; width: 200pt; display: inline-block; margin-bottom: 2pt; }
+  .sig-table { width: 100%; margin-top: 20pt; }
+  .sig-table td { vertical-align: top; padding: 4pt 0; }
+  .watermark { 
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-45deg);
+    font-size: 60pt; color: rgba(180,0,0,0.04); font-weight: 900; white-space: nowrap;
+    pointer-events: none; z-index: 0; text-transform: uppercase; letter-spacing: 20px;
+  }
+  .content { position: relative; z-index: 1; }
+  .draft-banner { 
+    background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; 
+    padding: 6pt 10pt; margin-bottom: 14pt; font-size: 10pt; 
+    font-family: Arial, sans-serif; color: #856404;
+    display: flex; align-items: center; gap: 8pt;
+  }
+  .official-stamp-area { 
+    border: 1px dashed #aaa; padding: 8pt; text-align: center; 
+    font-size: 9pt; color: #888; margin: 10pt 0; font-family: Arial, sans-serif;
+  }
+  .fee-note { font-size: 10pt; border: 1px solid #aaa; padding: 6pt 10pt; margin: 8pt 0; font-family: Arial, sans-serif; }
+  hr.thick { border: none; border-top: 2px solid #000; margin: 10pt 0; }
+  hr.thin { border: none; border-top: 1px solid #aaa; margin: 8pt 0; }
+  .page-num { position: absolute; bottom: 12pt; right: 20mm; font-size: 10pt; color: #666; font-family: Arial, sans-serif; }
+`;
+
+/** Wraps any document body in the shared shell */
+function shell(body: string, watermarkText = "DRAFT"): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nyay Mitra — Legal Document</title>
+<style>${BASE_CSS}</style>
+</head>
+<body>
+<div class="page">
+  <div class="watermark">${watermarkText}</div>
+  <div class="content">
+    <div class="draft-banner">
+      ⚠️ <strong>DRAFT DOCUMENT</strong> — Generated by Nyay Mitra AI. Must be reviewed and verified by a licensed Advocate before filing. This is not a substitute for professional legal advice.
+    </div>
+    ${body}
+  </div>
+  <div class="page-num">Page 1 of 1 &nbsp;|&nbsp; Nyay Mitra — AI Legal Platform</div>
+</div>
+</body>
+</html>`;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// RTI APPLICATION — Form under Section 6(1), RTI Act 2005
+// ──────────────────────────────────────────────────────────────────────────────
+function rtiTemplate(f: Record<string, string>, aiBody?: string): string {
+  const date = today();
+  return shell(`
+    <div class="doc-header">
+      <div class="doc-title">Application under the Right to Information Act, 2005</div>
+      <div class="doc-subtitle">Under Section 6(1) read with Section 6(3) — RTI Act, 2005</div>
+    </div>
+
+    <div class="doc-ref"><span class="bold">To,</span><br>
+    The Public Information Officer / CPIO,<br>
+    <span class="bold">${f.authority || "[Name of Public Authority / Government Department]"}</span>
+    </div>
+
+    <div class="doc-ref" style="margin-top:10pt;"><span class="bold">Date:</span> ${date}</div>
+
+    <div class="section-label">Subject: Request for Information under RTI Act, 2005</div>
+    <div class="para" style="margin-top:6pt;">
+      <em>Subject:</em> <span class="bold">${f.subject || "[Subject of your RTI Request]"}</span>
+    </div>
+
+    <div class="section-label">Details of the Applicant</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10pt;font-size:12pt;">
+      <tr><td style="width:40%;padding:3pt 0"><span class="bold">1. Name of Applicant:</span></td><td>${f.applicant_name || "_______________________________"}</td></tr>
+      <tr><td style="padding:3pt 0"><span class="bold">2. Address:</span></td><td style="white-space:pre-line">${f.applicant_address || "_______________________________"}</td></tr>
+      <tr><td style="padding:3pt 0"><span class="bold">3. Nationality:</span></td><td>Indian</td></tr>
+    </table>
+
+    <div class="section-label">Information Sought</div>
+    <div class="para">
+      The applicant respectfully seeks the following information under the Right to Information Act, 2005:
+    </div>
+    <div class="para indent" style="white-space:pre-line;">${
+      aiBody || f.information_needed || "[Describe the specific information you require, with particulars as to the period, documents, files, records, etc.]"
+    }</div>
+
+    <div class="section-label">Fee Details</div>
+    <div class="fee-note">
+      Application Fee: ₹10/- (Rupees Ten Only) deposited by &nbsp;
+      □ Indian Postal Order &nbsp; □ Demand Draft &nbsp; □ Court Fee Stamp &nbsp; □ Cash (as permissible)<br>
+      <em>Note: Citizens Below Poverty Line (BPL) are exempt from fee. Attach BPL Card copy.</em>
+    </div>
+
+    <div class="para">
+      If the information requested is not directly available with your office, please transfer this application to the concerned Public Authority under <span class="bold">Section 6(3)</span> of the RTI Act, 2005, and intimate the Applicant accordingly.
+    </div>
+    <div class="para">
+      The Applicant requests that the information be furnished within <span class="bold">thirty (30) days</span> from the date of receipt of this application, as mandated under <span class="bold">Section 7(1)</span> of the RTI Act, 2005.
+    </div>
+
+    <div class="official-stamp-area">
+      [Space for Office Seal / Acknowledgement Stamp]<br>
+      Date of Receipt: _____________ &nbsp;&nbsp; Receipt No.: _____________
+    </div>
+
+    <div class="sig-block">
+      <div class="para">Yours faithfully,</div>
+      <br>
+      <div class="sig-line"></div><br>
+      <div class="bold">${f.applicant_name || "[Applicant's Name]"}</div>
+      <div>${f.applicant_address || "[Address]"}</div>
+      <div>Date: ${date}</div>
+    </div>
+  `);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// LEGAL NOTICE — Demand / Cease & Desist
+// ──────────────────────────────────────────────────────────────────────────────
+function legalNoticeTemplate(f: Record<string, string>, aiBody?: string): string {
+  const date = today();
+  return shell(`
+    <div class="doc-title">LEGAL NOTICE</div>
+    <div class="doc-subtitle">Under the Relevant Provisions of Indian Law</div>
+    <hr class="thick">
+
+    <table style="width:100%;margin:12pt 0;font-size:12pt;">
+      <tr>
+        <td style="vertical-align:top;width:50%;padding-right:20pt">
+          <div class="bold">From:</div>
+          <div class="sig-line" style="width:180pt"></div><br>
+          <div class="bold">${f.your_name || "[Your Full Name]"}</div>
+          <div style="white-space:pre-line;">${f.your_address || "[Your Complete Address]"}</div>
+        </td>
+        <td style="vertical-align:top;text-align:right;">
+          <div class="bold">Notice No.:</div><div>NM/${new Date().getFullYear()}/${Math.floor(Math.random()*9000)+1000}</div>
+          <div class="bold" style="margin-top:6pt;">Date:</div><div>${date}</div>
+        </td>
+      </tr>
+    </table>
+
+    <div style="margin:10pt 0;">
+      <div class="bold">To,</div>
+      <div class="bold">${f.notice_to || "[Name of Recipient / Opposite Party]"}</div>
+      <div style="white-space:pre-line;">${f.notice_to_address || "[Complete Address of Recipient]"}</div>
+    </div>
+
+    <div style="margin:10pt 0;">
+      <span class="bold underline">Subject: Legal Notice — ${(f.claim_details || "[Matter]").substring(0, 80)}${(f.claim_details || "").length > 80 ? "…" : ""}</span>
+    </div>
+
+    <div class="para" style="margin-top:10pt;"><span class="bold">WITHOUT PREJUDICE</span></div>
+    <div class="para">Sir / Madam,</div>
+
+    <div class="para">
+      I, <span class="bold">${f.your_name || "[Name]"}</span>, am addressing this legal notice to you on the following grounds:
+    </div>
+
+    <div class="section-label">Facts &amp; Grounds</div>
+    <div class="para" style="white-space:pre-line;">${
+      aiBody || f.claim_details || "[State the complete facts and grounds of the dispute / claim / demand]"
+    }</div>
+
+    <div class="section-label">Demand</div>
+    <div class="para">
+      In view of the foregoing, you are hereby called upon and required to <span class="bold">${f.demand || "[State your specific demand — payment / action / desist]"}</span> within <span class="bold">${f.timeline || "15"} (${f.timeline || "fifteen"}) days</span> from the date of receipt of this notice.
+    </div>
+
+    <div class="prayer-box">
+      <div class="bold">TAKE FURTHER NOTICE</div> that in the event of your failure to comply with the above demand within the stipulated time, my client / I shall be constrained to initiate appropriate legal proceedings against you before the competent court / forum, at your risk as to costs and consequences thereof.
+    </div>
+
+    <div class="para">This notice is issued without prejudice to any other rights and remedies available to the noticee under law.</div>
+
+    <div class="sig-block">
+      <table class="sig-table">
+        <tr>
+          <td>
+            <div class="bold">Issued by:</div>
+            <br>
+            <div class="sig-line"></div><br>
+            <div class="bold">${f.your_name || "[Name]"}</div>
+            <div>Date: ${date}</div>
+          </td>
+          <td style="text-align:right;">
+            <div class="official-stamp-area" style="width:120pt;height:80pt;display:inline-block;line-height:1.4;">
+              Stamp / Seal<br><em>(If issued through Advocate)</em>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// BAIL APPLICATION — Under Section 437/439 CrPC (or Sec 480/483 BNSS)
+// ──────────────────────────────────────────────────────────────────────────────
+function bailPetitionTemplate(f: Record<string, string>, aiBody?: string): string {
+  const date = today();
+  return shell(`
+    <div class="court-name">
+      IN THE COURT OF THE HON'BLE SESSIONS JUDGE<br>
+      <span style="font-size:12pt;font-weight:normal;">[District Court — ______________________]</span>
+    </div>
+
+    <div class="doc-title" style="margin-top:10pt;">
+      Application for Bail under Sections 437/439 of the Code of Criminal Procedure, 1973<br>
+      <span style="font-size:11pt;">(or Sections 480/483 of Bharatiya Nagarik Suraksha Sanhita, 2023)</span>
+    </div>
+
+    <div class="cause-title" style="margin:14pt 0;">
+      <table>
+        <tr>
+          <td>
+            <div class="bold">IN THE MATTER OF:</div><br>
+            <div><span class="bold">Applicant/Accused:</span> ${f.accused_name || "[Name of Accused]"}</div>
+            <div style="margin-top:6pt;"><span class="bold">FIR No.:</span> ${f.fir_number || "[FIR Number]"} &nbsp;&nbsp;&nbsp; <span class="bold">Year:</span> ${new Date().getFullYear()}</div>
+            <div><span class="bold">Police Station:</span> ${f.police_station || "[Police Station Name]"}</div>
+            <div><span class="bold">Sections / Offences:</span> ${f.charges || "[IPC/BNSS Sections]"}</div>
+          </td>
+          <td class="versus">vs.</td>
+          <td>
+            <div class="bold">Opposite Party:</div><br>
+            <div>State (Through PP / Investigating Officer)</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="doc-title">APPLICATION FOR BAIL</div>
+    <div class="para center bold">MOST RESPECTFULLY SHOWETH:</div>
+
+    <div class="para">
+      <span class="para-num">1.</span>
+      That the Applicant <span class="bold">${f.accused_name || "[Name of Accused]"}</span> has been arrested in connection with FIR No. <span class="bold">${f.fir_number || "[FIR No.]"}</span> registered at <span class="bold">${f.police_station || "[Police Station]"}</span> under Sections <span class="bold">${f.charges || "[Sections]"}</span>.
+    </div>
+
+    <div class="para">
+      <span class="para-num">2.</span>
+      That the Applicant is presently in judicial custody since the date of arrest and has been remanded to judicial custody by the learned Magistrate.
+    </div>
+
+    <div class="section-label">Grounds for Release on Bail</div>
+    <div class="para">
+      <span class="para-num">3.</span>
+      That the Applicant seeks bail on the following grounds:
+    </div>
+    <div class="para indent" style="white-space:pre-line;">${
+      aiBody || f.grounds_for_bail || "[State detailed grounds — co-operation with investigation, no flight risk, community ties, family responsibilities, health conditions, etc.]"
+    }</div>
+
+    <div class="para">
+      <span class="para-num">4.</span>
+      That the Applicant offers <span class="bold">${f.surety_name || "[Name of Surety / Guarantor]"}</span> as surety and undertakes to abide by all conditions imposed by this Hon'ble Court.
+    </div>
+
+    <div class="para">
+      <span class="para-num">5.</span>
+      That the Applicant undertakes to co-operate fully with the investigation, not to tamper with evidence, not to leave the country without prior permission of this Court, and to attend all hearings as directed.
+    </div>
+
+    <div class="prayer-box">
+      <div class="bold section-label" style="margin-top:0;">PRAYER</div>
+      <div class="para">
+        It is, therefore, most respectfully prayed that this Hon'ble Court may graciously be pleased to:
+      </div>
+      <div class="para indent">a) Grant bail to the Applicant in the captioned FIR;</div>
+      <div class="para indent">b) Accept the surety / personal bond offered by the Applicant;</div>
+      <div class="para indent">c) Pass such other and further orders as this Hon'ble Court may deem fit and proper in the interest of justice.</div>
+      <div class="para">And for this act of kindness, the Applicant shall ever pray.</div>
+    </div>
+
+    <div class="sig-block">
+      <table class="sig-table">
+        <tr>
+          <td>
+            <div>Place: ______________________</div>
+            <div>Date: ${date}</div>
+          </td>
+          <td style="text-align:right;">
+            <div class="sig-line"></div><br>
+            <div class="bold">Counsel for Applicant</div>
+            <div style="font-size:11pt;">(Advocate's Name, Enrolment No.)</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <hr class="thin" style="margin-top:20pt;">
+    <div style="font-size:10pt;font-family:Arial,sans-serif;color:#555;">
+      ⚖️ <em>Note: This application must be signed and filed by a licensed Advocate on the record of this Court. CNR / Case file number to be updated at filing.</em>
+    </div>
+  `);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONSUMER COMPLAINT — Consumer Protection Act, 2019
+// ──────────────────────────────────────────────────────────────────────────────
+function consumerComplaintTemplate(f: Record<string, string>, aiBody?: string): string {
+  const date = today();
+  return shell(`
+    <div class="court-name">
+      BEFORE THE DISTRICT CONSUMER DISPUTES REDRESSAL COMMISSION<br>
+      <span style="font-size:12pt;font-weight:normal;">_______________________, [District]</span>
+    </div>
+
+    <div class="doc-title">Consumer Complaint</div>
+    <div class="doc-subtitle">Under Sections 35–38 of the Consumer Protection Act, 2019</div>
+
+    <div style="text-align:right;margin-bottom:8pt;font-size:12pt;">
+      <span class="bold">Complaint No.:</span> _________ / ${new Date().getFullYear()}<br>
+      <span class="bold">Date of Filing:</span> ${date}
+    </div>
+
+    <div class="cause-title">
+      <table>
+        <tr>
+          <td>
+            <div class="bold">Complainant:</div>
+            <div>${f.your_name || "[Complainant's Full Name]"}</div>
+            <div style="white-space:pre-line;font-size:11pt;">${f.your_address || "[Complete Address]"}</div>
+          </td>
+          <td class="versus">vs.</td>
+          <td>
+            <div class="bold">Opposite Party:</div>
+            <div>${f.opposite_party || "[Name of Company / Person]"}</div>
+            <div style="white-space:pre-line;font-size:11pt;">${f.opposite_party_address || "[Complete Address of OP]"}</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section-label">A. Jurisdiction &amp; Valuation</div>
+    <div class="para">
+      This Commission has territorial and pecuniary jurisdiction to entertain the present complaint. The cause of action arose within the jurisdiction of this Commission.
+    </div>
+
+    <div class="section-label">B. Facts of the Complaint</div>
+    <div class="para">
+      <span class="para-num">1.</span>
+      The Complainant purchased goods / availed services from the Opposite Party on <span class="bold">${f.purchase_date || "[Date of Purchase / Service]"}</span>.
+    </div>
+    <div class="para">
+      <span class="para-num">2.</span>
+      The Complainant is a "Consumer" as defined under <span class="bold">Section 2(7)</span> of the Consumer Protection Act, 2019.
+    </div>
+    <div class="para">
+      <span class="para-num">3.</span>
+      The following defect / deficiency in goods / services was observed:
+    </div>
+    <div class="para indent" style="white-space:pre-line;">${
+      aiBody || f.complaint_details || "[Describe the defect, deficiency, unfair trade practice, or restrictive trade practice in detail]"
+    }</div>
+
+    <div class="section-label">C. Relief Sought</div>
+    <div class="para">In view of the above, the Complainant respectfully prays for:</div>
+    <div class="para indent" style="white-space:pre-line;">${f.relief_sought || "[State specific compensation, replacement, refund, or other relief]"}</div>
+
+    <div class="prayer-box">
+      <div class="bold section-label" style="margin-top:0;">PRAYER</div>
+      <div class="para">It is therefore, most respectfully prayed that this Hon'ble Commission may be pleased to direct the Opposite Party to:</div>
+      <div class="para indent">a) Pay / provide the relief as stated above;</div>
+      <div class="para indent">b) Pay compensation for mental agony, harassment, and financial loss as deemed fit;</div>
+      <div class="para indent">c) Pay litigation costs;</div>
+      <div class="para indent">d) Pass such other orders as this Commission deems just and proper.</div>
+    </div>
+
+    <div class="fee-note">
+      <span class="bold">Court Fee Paid:</span> ₹ ___________/- vide Receipt No.: ___________<br>
+      <em>(Fee under Consumer Protection (Consumer Commission Procedure) Rules, 2020)</em>
+    </div>
+
+    <div class="sig-block">
+      <table class="sig-table">
+        <tr>
+          <td>
+            <div>Place: ______________________</div>
+            <div>Date: ${date}</div>
+          </td>
+          <td style="text-align:right;">
+            <div class="sig-line"></div><br>
+            <div class="bold">${f.your_name || "Complainant"}</div>
+            <div style="font-size:11pt;">Or through Counsel</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="margin-top:20pt;">
+      <div class="bold section-label">VERIFICATION</div>
+      <div class="para">I, <span class="bold">${f.your_name || "[Name]"}</span>, do hereby verify that the contents of the above Complaint are true and correct to the best of my knowledge and belief, and nothing material has been concealed therein.</div>
+      <div class="sig-block">
+        <div class="sig-line"></div><br>
+        <div>Verified at _____________ on ${date}</div>
+      </div>
+    </div>
+  `);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// AFFIDAVIT — Sworn Statement (Notarisable Format)
+// ──────────────────────────────────────────────────────────────────────────────
+function affidavitTemplate(f: Record<string, string>, aiBody?: string): string {
+  const date = today();
+  return shell(`
+    <div class="doc-title">AFFIDAVIT</div>
+    <div class="doc-subtitle">[On Non-Judicial Stamp Paper of appropriate value as per State rules]</div>
+
+    <div class="official-stamp-area" style="margin:10pt 0;">
+      Stamp Paper Value: ₹ _______ &nbsp;&nbsp;&nbsp; Stamp Paper No.: _________________ &nbsp;&nbsp;&nbsp; Date of Issue: _________________
+    </div>
+
+    <div class="para" style="margin-top:14pt;">
+      I, <span class="bold">${f.deponent_name || "[Full Name of Deponent]"}</span>, aged <span class="bold">${f.deponent_age || "____"}</span> years, son / daughter / wife of ________________________, residing at <span class="bold" style="white-space:pre-line;">${f.deponent_address || "[Permanent Residential Address]"}</span>, do hereby solemnly affirm and declare as under:
+    </div>
+
+    <div class="section-label">Statement of Facts</div>
+    <div class="para">
+      THAT I am the Deponent above named and am competent to swear this Affidavit.
+    </div>
+    <div class="para">
+      THAT the following facts are true and correct to the best of my knowledge, belief and information:
+    </div>
+
+    <div class="para indent" style="white-space:pre-line;">${
+      aiBody || f.statement_of_facts || "[Set out all facts in separate numbered paragraphs. Each paragraph should deal with one distinct fact.]"
+    }</div>
+
+    <div class="para" style="margin-top:14pt;">
+      THAT I say that the contents of this Affidavit are true and correct to the best of my knowledge, information, and belief, and nothing material has been concealed therefrom.
+    </div>
+
+    <div class="prayer-box">
+      <div class="center bold">DEPONENT</div>
+      <br>
+      <div class="sig-line" style="display:block;margin:0 auto;"></div>
+      <div class="center bold">${f.deponent_name || "[Deponent's Name]"}</div>
+    </div>
+
+    <div style="margin-top:20pt;">
+      <div class="bold">VERIFICATION</div>
+      <div class="para">Verified at <span class="bold">[City / Place]</span> on this <span class="bold">${date}</span>.</div>
+      <div class="para">I, the above-named Deponent, do hereby verify that the contents of the above Affidavit are true and correct to the best of my knowledge and belief, and no part of it is false, and nothing material has been concealed therein.</div>
+      <div class="sig-block">
+        <div class="sig-line"></div><br>
+        <div class="bold">Deponent</div>
+      </div>
+    </div>
+
+    <div style="margin-top:20pt;border-top:2px solid #000;padding-top:14pt;">
+      <div class="bold center">NOTARY / OATH COMMISSIONER</div>
+      <div class="official-stamp-area" style="height:100pt;margin-top:10pt;">
+        [Space for Notary Seal, Signature & Registration Number]<br><br>
+        Name: _______________________<br>
+        Registration No.: _______________________<br>
+        Jurisdiction: _______________________
+      </div>
+    </div>
+
+    <div style="margin-top:10pt;font-size:10pt;font-family:Arial,sans-serif;color:#555;">
+      ⚠️ <em>This Affidavit must be executed on non-judicial stamp paper of the value prescribed by the State government and sworn before a Notary Public or Oath Commissioner or before any court / magistrate.</em>
+    </div>
+  `);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CO-FOUNDER AGREEMENT — India (Companies Act, 2013)
+// ──────────────────────────────────────────────────────────────────────────────
+function founderAgreementTemplate(f: Record<string, string>, aiBody?: string): string {
+  const date = today();
+  return shell(`
+    <div class="doc-title">${(f.startup_name || "[STARTUP NAME]").toUpperCase()}</div>
+    <div class="doc-title">CO-FOUNDER AGREEMENT</div>
+    <div class="doc-subtitle">This Agreement is executed at ${f.jurisdiction || "[City, State]"} on ${date}</div>
+    <hr class="thick">
+
+    <div class="section-label">AMONG THE FOUNDERS:</div>
+    <table style="width:100%;border-collapse:collapse;margin:10pt 0;font-size:12pt;">
+      <tr style="border-bottom:1px solid #ddd;">
+        <td style="padding:6pt;font-weight:bold;">Party</td>
+        <td style="padding:6pt;font-weight:bold;">Name</td>
+        <td style="padding:6pt;font-weight:bold;">Equity %</td>
+        <td style="padding:6pt;font-weight:bold;">Role</td>
+      </tr>
+      <tr>
+        <td style="padding:6pt;">Founder 1</td>
+        <td style="padding:6pt;">${f.founder1_name || "[Founder 1 Name]"}</td>
+        <td style="padding:6pt;">${f.founder1_equity || "__ "}%</td>
+        <td style="padding:6pt;">[Role / Designation]</td>
+      </tr>
+      <tr style="background:#fafafa;">
+        <td style="padding:6pt;">Founder 2</td>
+        <td style="padding:6pt;">${f.founder2_name || "[Founder 2 Name]"}</td>
+        <td style="padding:6pt;">${f.founder2_equity || "__ "}%</td>
+        <td style="padding:6pt;">[Role / Designation]</td>
+      </tr>
+    </table>
+
+    <div class="para">Hereinafter collectively referred to as the <span class="bold">"Founders"</span> of <span class="bold">${f.startup_name || "[Startup / Company Name]"}</span> (the <span class="bold">"Company"</span>).</div>
+
+    <div class="section-label">1. VENTURE &amp; PURPOSE</div>
+    <div class="para">The Founders are collaborating to develop, build and launch the Company. This Agreement governs ownership, responsibilities, and equity rights of the Founders.</div>
+
+    <div class="section-label">2. EQUITY OWNERSHIP</div>
+    <div class="para">The Founders agree on the following equity distribution in the Company:</div>
+    <div class="para indent">
+      • <span class="bold">${f.founder1_name || "[Founder 1]"}:</span> ${f.founder1_equity || "__ "}% of fully diluted share capital<br>
+      • <span class="bold">${f.founder2_name || "[Founder 2]"}:</span> ${f.founder2_equity || "__ "}% of fully diluted share capital
+    </div>
+
+    <div class="section-label">3. VESTING SCHEDULE</div>
+    <div class="para">Equity issued to the Founders shall vest over <span class="bold">${f.vesting_period || "[4 years]"}</span> with a <span class="bold">${f.cliff_period || "[1 year]"}</span> cliff as follows:</div>
+    <div class="para indent">
+      a) No equity shall vest until the expiry of the cliff period;<br>
+      b) On completion of the cliff period, <span class="bold">25%</span> of total equity shall vest;<br>
+      c) Thereafter, the remaining equity shall vest in equal <span class="bold">monthly installments</span> over the remaining vesting period;<br>
+      d) If a Founder departs before full vesting, unvested equity shall be repurchased by the Company at face value.
+    </div>
+
+    <div class="section-label">4. ROLES, RESPONSIBILITIES &amp; TIME COMMITMENT</div>
+    <div class="para" style="white-space:pre-line;">${aiBody || "[Each Founder shall devote full time and attention to the Company unless otherwise mutually agreed in writing. Outside business activities require prior written consent.]"}</div>
+
+    <div class="section-label">5. INTELLECTUAL PROPERTY ASSIGNMENT</div>
+    <div class="para">All Intellectual Property (including inventions, code, designs, trademarks, trade secrets, copyrights) created by the Founders in connection with the Company shall be assigned to and owned exclusively by the Company.</div>
+
+    <div class="section-label">6. CONFIDENTIALITY</div>
+    <div class="para">Each Founder agrees to maintain strict confidentiality regarding the Company's proprietary information, trade secrets, and business strategies, both during and after their association with the Company.</div>
+
+    <div class="section-label">7. GOVERNING LAW &amp; DISPUTE RESOLUTION</div>
+    <div class="para">This Agreement shall be governed by the laws of India. Disputes shall be resolved by Arbitration in accordance with the Arbitration and Conciliation Act, 1996, at <span class="bold">${f.jurisdiction || "[City]"}</span>, with proceedings in English.</div>
+
+    <div class="sig-block" style="margin-top:24pt;">
+      <div class="bold">IN WITNESS WHEREOF,</div>
+      <div class="para">the Founders have signed this Agreement on the date first written above.</div>
+      <table class="sig-table" style="margin-top:16pt;">
+        <tr>
+          <td>
+            <div class="sig-line"></div><br>
+            <div class="bold">${f.founder1_name || "[Founder 1 Name]"}</div>
+            <div>Founder 1</div> <div>Date: ${date}</div>
+          </td>
+          <td style="text-align:right;">
+            <div class="sig-line"></div><br>
+            <div class="bold">${f.founder2_name || "[Founder 2 Name]"}</div>
+            <div>Founder 2</div> <div>Date: ${date}</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="margin-top:20pt;border-top:1px solid #aaa;padding-top:10pt;font-size:10pt;font-family:Arial,sans-serif;color:#555;">
+      <span class="bold">Witness 1:</span> _________________________ &nbsp;&nbsp;&nbsp; <span class="bold">Witness 2:</span> _________________________<br>
+      ⚠️ <em>This is a template draft. Must be reviewed by a Chartered Accountant (for share valuation) and Legal Counsel (for compliance with Companies Act, 2013) before execution. Stamp duty as per State laws applicable.</em>
+    </div>
+  `);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ESOP POLICY — Companies Act 2013 / SEBI (SBEB) Regulations 2021
+// ──────────────────────────────────────────────────────────────────────────────
+function esopPolicyTemplate(f: Record<string, string>, aiBody?: string): string {
+  const date = today();
+  return shell(`
+    <div class="doc-title">${(f.startup_name || "[COMPANY NAME]").toUpperCase()}</div>
+    <div class="doc-title">EMPLOYEE STOCK OPTION PLAN (ESOP) POLICY</div>
+    <div class="doc-subtitle">Adopted pursuant to Section 62(1)(b) of the Companies Act, 2013 read with Rule 12 of the Companies (Share Capital and Debentures) Rules, 2014</div>
+    <hr class="thick">
+
+    <div class="section-label">1. DEFINITIONS</div>
+    <div class="para">"<span class="bold">Company</span>" means <span class="bold">${f.startup_name || "[Company Name]"}</span>. | "<span class="bold">Plan</span>" means this ESOP Policy. | "<span class="bold">Grant Date</span>" means the date an Option is granted. | "<span class="bold">Vesting</span>" means the process by which an Option becomes exercisable. | "<span class="bold">Exercise Price</span>" means the price at which a Grantee may subscribe for shares.</div>
+
+    <div class="section-label">2. PURPOSES OF THE PLAN</div>
+    <div class="para">The Plan is designed to attract, retain, motivate and reward eligible Employees, Directors, and Consultants of the Company by providing them an opportunity to acquire an equity interest in the Company.</div>
+
+    <div class="section-label">3. ESOP POOL SIZE</div>
+    <div class="para">The maximum aggregate number of Options that may be granted under this Plan shall represent <span class="bold">${f.total_pool_size || "[ ]"}%</span> of the fully diluted share capital of the Company (the <span class="bold">"Option Pool"</span>), as approved by the ${f.board_approver || "Board of Directors"}. The pool may be increased by shareholder approval.</div>
+
+    <div class="section-label">4. ADMINISTRATION</div>
+    <div class="para">The Plan shall be administered by the <span class="bold">${f.board_approver || "Board of Directors"}</span> or a Compensation Committee constituted thereunder (the <span class="bold">"Administrator"</span>). The Administrator shall have full power to select Grantees, determine Grant dates, Exercise Prices, and Vesting conditions.</div>
+
+    <div class="section-label">5. VESTING SCHEDULE</div>
+    <div class="para">Unless specified otherwise in a Grant Letter:</div>
+    <div class="para indent">
+      a) Options shall vest over <span class="bold">${f.vesting_period || "[___ years]"}</span> from the Grant Date;<br>
+      b) A cliff of <span class="bold">${f.cliff_period || "[___ year]"}</span> shall apply — no Options vest before the cliff;<br>
+      c) On completion of cliff: 25% of Options vest;<br>
+      d) Thereafter: remaining Options vest monthly in equal installments.
+    </div>
+
+    <div class="section-label">6. EXERCISE OF OPTIONS</div>
+    <div class="para">Vested Options may be exercised within the Exercise Period of <span class="bold">${f.exercise_period || "[___ years]"}</span> from the Vesting Date, upon payment of the Exercise Price. <span class="bold">Unexercised vested Options expire at the end of the Exercise Period.</span></div>
+
+    <div class="section-label">7. GOOD LEAVER / BAD LEAVER</div>
+    <div class="para indent">
+      a) <span class="bold">Good Leaver</span> (resignation after cliff, retirement, death, disability): Vested Options may be exercised within 90 days. Unvested Options lapse.<br>
+      b) <span class="bold">Bad Leaver</span> (termination for cause): All Options (vested and unvested) lapse immediately.
+    </div>
+
+    <div class="section-label">8. CHANGE OF CONTROL / IPO / EXIT EVENT</div>
+    <div class="para" style="white-space:pre-line;">${aiBody || "In the event of a Change of Control (acquisition, merger) or an IPO, the Administrator may accelerate vesting of outstanding Options, substitute Options with equivalent rights of the acquiring entity, or provide for cash-out at fair value, as deemed appropriate in the interests of the Company and Grantees."}</div>
+
+    <div class="section-label">9. COMPLIANCE</div>
+    <div class="para">The Plan shall comply with the Companies Act, 2013, SEBI (Share Based Employee Benefits and Sweat Equity) Regulations, 2021 (if applicable to listed companies), Income Tax Act, 1961 (perquisite taxation on exercise), and FEMA regulations for international grantees.</div>
+
+    <div class="prayer-box">
+      <div class="bold">BOARD RESOLUTION</div>
+      <div class="para">Resolved that this ESOP Policy be and is hereby adopted by the Company pursuant to Section 62(1)(b) of the Companies Act, 2013, with effect from ${date}.</div>
+    </div>
+
+    <div class="sig-block">
+      <table class="sig-table">
+        <tr>
+          <td>
+            <div class="sig-line"></div><br>
+            <div class="bold">Authorised Signatory</div>
+            <div>${f.board_approver || "For the Board of Directors"}</div>
+            <div>${f.startup_name || "[Company Name]"}</div>
+            <div>Date: ${date}</div>
+          </td>
+          <td style="text-align:right;">
+            <div class="official-stamp-area" style="width:120pt;height:80pt;display:inline-block;">Company Seal</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="margin-top:10pt;font-size:10pt;font-family:Arial,sans-serif;color:#555;">
+      ⚠️ <em>Requires review by a Company Secretary (CS) and Chartered Accountant (CA). Board approval + optional shareholder approval required before operation. Perquisite tax implications on exercise must be assessed.</em>
+    </div>
+  `);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PUBLIC API
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a print-ready official-format HTML document.
+ * 
+ * @param type     One of the DocumentType values
+ * @param fields   User-provided form fields (used for metadata / header)
+ * @param aiBody   Optional: AI-generated narrative body to embed in the document
+ * @returns        Complete HTML string ready to render or print
+ */
+export function generateOfficialDoc(
+  type: DocumentType,
+  fields: Record<string, string>,
+  aiBody?: string
+): string {
+  switch (type) {
+    case "rti":              return rtiTemplate(fields, aiBody);
+    case "legal_notice":     return legalNoticeTemplate(fields, aiBody);
+    case "bail_petition":    return bailPetitionTemplate(fields, aiBody);
+    case "consumer_complaint":  return consumerComplaintTemplate(fields, aiBody);
+    case "affidavit":        return affidavitTemplate(fields, aiBody);
+    case "founder_agreement": return founderAgreementTemplate(fields, aiBody);
+    case "esop_policy":      return esopPolicyTemplate(fields, aiBody);
+    default:                 return shell(`<div class="para">Unsupported document type: ${type}</div>`);
+  }
+}
