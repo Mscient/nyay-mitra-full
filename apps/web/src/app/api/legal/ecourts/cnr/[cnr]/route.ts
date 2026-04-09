@@ -16,13 +16,13 @@ export async function GET(request: Request, { params }: { params: { cnr: string 
         const data = await response.json();
         return NextResponse.json({ data, source: "eciapi" });
       }
-    } catch (err: any) {
-      console.error("[eCourts API Error]", err.message);
+    } catch (err: unknown) {
+      console.error("[eCourts API Error]", err instanceof Error ? err.message : err);
     }
   }
 
   // Mock data fallback matching legacy Vite behavior
-  const mockData: Record<string, any> = {
+  const mockData: Record<string, unknown> = {
     MHAU010002132023: {
       cnr_number: "MHAU010002132023",
       case_title: "State of Maharashtra vs Suresh Jadhav",

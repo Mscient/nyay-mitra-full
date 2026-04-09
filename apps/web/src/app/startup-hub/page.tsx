@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Clock, AlertTriangle, ExternalLink, Building, FileText, Users, Shield, ArrowLeft } from "lucide-react";
 
 type TabId = "incorporation" | "agreements" | "compliance" | "ip";
 
-const TABS: { id: TabId; label: string; icon: any }[] = [
+const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "incorporation", label: "Incorporation", icon: Building },
   { id: "agreements", label: "Agreements", icon: Users },
   { id: "compliance", label: "Compliance Calendar", icon: Clock },
@@ -216,7 +216,7 @@ export default function StartupHubPage() {
 
       {activeTab === "ip" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
-          <p style={{ margin: "0 0 16px 0", fontSize: 15, color: "var(--ink-muted)" }}>Protect your startup's intellectual property proactively — before raising funding or hiring team members.</p>
+          <p style={{ margin: "0 0 16px 0", fontSize: 15, color: "var(--ink-muted)" }}>Protect your startup&apos;s intellectual property proactively — before raising funding or hiring team members.</p>
           
           {IP_GUIDE.map((item, i) => (
             <div key={i} style={{ background: "var(--ivory)", border: "1px solid var(--border-color)", borderRadius: 12, padding: 24, display: "flex", gap: 20 }}>

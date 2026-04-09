@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
 
-declare global { interface Window { google?: any; } }
+declare global { interface Window { google?: { accounts?: { id?: { initialize: (opts: Record<string, unknown>) => void; renderButton: (el: HTMLElement, opts: Record<string, unknown>) => void; } } }; } }
 const GOOGLE_CLIENT_ID = "450969618266-iom7rkqvkfh1teb4p3tlupsq1hlgh041.apps.googleusercontent.com";
 
 export default function LoginPage() {
@@ -46,10 +46,10 @@ export default function LoginPage() {
     return () => { if (document.head.contains(script)) document.head.removeChild(script); };
   }, []);
 
-  async function handleGoogleResponse(response: any) {
+  async function handleGoogleResponse(_response: Record<string, unknown>) {
     setIsLoading(true); setGlobalError("");
     try {
-      // Stub: in real app, send response.credential to identity-svc
+      // Stub: in real app, send _response.credential to identity-svc
       localStorage.setItem("nyay_token", "stub_google_jwt");
       router.push(returnTo);
     } catch {
@@ -93,8 +93,8 @@ export default function LoginPage() {
       localStorage.setItem("nyay_token", data.token);
       router.push(returnTo);
       router.refresh();
-    } catch (err: any) {
-      setGlobalError(err.message || "Invalid credentials. Please try again.");
+    } catch (err: unknown) {
+      setGlobalError(err instanceof Error ? err.message : "Invalid credentials. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -167,7 +167,7 @@ export default function LoginPage() {
 
         <div style={{ marginTop: 32, textAlign: "center", display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ fontSize: 14, color: "var(--ink-muted)" }}>
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href={`/register${returnTo !== "/chat" ? `?returnTo=${returnTo}` : ""}`} style={{ color: "var(--forest)", fontWeight: 700, textDecoration: "none" }}>Register</Link>
           </div>
           <button onClick={() => router.push(returnTo)} style={{ background: "transparent", border: "none", color: "var(--ink-muted)", fontSize: 14, cursor: "pointer", fontWeight: 500 }}>Continue as Guest</button>

@@ -133,7 +133,7 @@ export default function DocumentGeneratorPage() {
         <div style={{ marginBottom: 40 }}>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>AI-Powered</div>
           <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 44, fontWeight: 500, color: "var(--ink)", lineHeight: 1.1 }}>Legal Document Generator</h1>
-          <p style={{ fontSize: 14, color: "var(--ink-muted)", marginTop: 10, maxWidth: 560, lineHeight: 1.7 }}>Generate standard legal documents in seconds. Fill in the details, we'll create the formatted draft. Always get a lawyer to review before filing.</p>
+          <p style={{ fontSize: 14, color: "var(--ink-muted)", marginTop: 10, maxWidth: 560, lineHeight: 1.7 }}>Generate standard legal documents in seconds. Fill in the details, we&apos;ll create the formatted draft. Always get a lawyer to review before filing.</p>
         </div>
 
         {!selected ? (

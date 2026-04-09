@@ -23,15 +23,6 @@ const useLanguage = () => {
   return { language, setLanguage, t: (k: string) => k };
 };
 
-const FEATURES = [
-  { icon: "⚡", title: "Sarvam AI Backbone", desc: "Native Indian-language LLM trained on 4B+ tokens. Understands khatauni, tehsildar, adalat — not just English." },
-  { icon: "🎙️", title: "Voice Agents", desc: "Call a number, speak in Bhojpuri, get a legal answer spoken back. No smartphone. No data plan. No literacy required." },
-  { icon: "📚", title: "RAG-Grounded", desc: "Every answer cites real IndianKanoon judgments and NALSA documents. Zero hallucinations by design." },
-  { icon: "🔒", title: "India-Hosted", desc: "All data stays in AWS Mumbai. DPDP Act 2023 compliant. Sensitive legal conversations never leave Indian servers." },
-  { icon: "⚖️", title: "NALSA Aligned", desc: "Modelled on the government's own Nyay Marg initiative. Free for all NALSA-eligible citizens." },
-  { icon: "📱", title: "USSD Fallback", desc: "*123# works on any mobile network without internet. Reaching India's truly last-mile population." },
-];
-
 const CITIZEN_FEATURES = [
   "AI legal Q&A in 22 Indian languages with case law citations",
   "Auto-generates RTI applications, legal notices, bail petitions",

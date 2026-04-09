@@ -5,6 +5,41 @@ import { useState } from "react";
 import Link from "next/link";
 import { Search, Calculator, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 
+interface BailResult {
+  name: string;
+  section: string;
+  offence: string;
+  maxYears: number;
+  daysServed: number;
+  halfMaxDays: number;
+  isEligible: boolean;
+  daysRemaining: number;
+  eligibilityDate: Date | null;
+  isBailable: boolean;
+  isLifeSentence: boolean;
+  courtName: string;
+  nextHearing: string;
+}
+
+interface CaseHistoryEntry {
+  date: string;
+  stage: string;
+  remarks: string;
+}
+
+interface TrackerCaseData {
+  cnr_number: string;
+  case_title: string;
+  court_name: string;
+  case_type: string;
+  status: string;
+  judge: string;
+  next_hearing_date: string;
+  petitioner: string;
+  respondent: string;
+  history: CaseHistoryEntry[];
+}
+
 const SECTION_DATA: Array<{ section: string; offence: string; maxYears: number; bailable: boolean }> = [
   { section: "302", offence: "Murder", maxYears: 99, bailable: false },
   { section: "307", offence: "Attempt to Murder", maxYears: 10, bailable: false },
@@ -39,12 +74,12 @@ export default function UndertrialTrackerPage() {
     name: "", section: "", customSection: "", customMaxYears: "",
     arrestDate: "", remandDate: "", policeStation: "", courtName: "", nextHearing: "",
   });
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<BailResult | null>(null);
 
   // Tracker State
   const [cnr, setCnr] = useState("");
   const [isFetchingTracker, setIsFetchingTracker] = useState(false);
-  const [trackerData, setTrackerData] = useState<any>(null);
+  const [trackerData, setTrackerData] = useState<TrackerCaseData | null>(null);
   const [trackerError, setTrackerError] = useState<string | null>(null);
 
   const selectedSection = SECTION_DATA.find(s => s.section === form.section);
@@ -84,7 +119,7 @@ export default function UndertrialTrackerPage() {
     try {
       const res = await fetch(`/api/legal/ecourts/cnr/${encodeURIComponent(cnr)}`);
       if (res.ok) {
-        const json = await res.json();
+        const json = await res.json() as { data: TrackerCaseData };
         setTrackerData(json.data);
       } else {
         const err = await res.json();
@@ -271,7 +306,7 @@ export default function UndertrialTrackerPage() {
                       <Clock size={16} color="var(--gold)" /> Case History
                     </h3>
                     <div style={{ display: "flex", flexDirection: "column", gap: 0, position: "relative" }}>
-                      {trackerData.history?.map((event: any, idx: number) => {
+                      {trackerData.history?.map((event: CaseHistoryEntry, idx: number) => {
                         const isLast = idx === trackerData.history.length - 1;
                         return (
                           <div key={idx} style={{ display: "flex", gap: 20, position: "relative" }}>

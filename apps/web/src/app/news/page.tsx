@@ -51,15 +51,15 @@ export default function LegalNewsPage() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      const articles: any[] = data.articles || [];
-      const mapped: NewsItem[] = articles.map((a: any) => ({
-        title: a.title || "Untitled",
-        link: a.link || "#",
-        description: a.description || "",
-        publishedAt: a.pubDate || null,
+      const articles: Record<string, unknown>[] = data.articles || [];
+      const mapped: NewsItem[] = articles.map((a: Record<string, unknown>) => ({
+        title: (a.title as string) || "Untitled",
+        link: (a.link as string) || "#",
+        description: (a.description as string) || "",
+        publishedAt: (a.pubDate as string) || null,
         source: a.source === "LiveLaw" ? "LiveLaw" : "Bar & Bench",
         sourceColor: a.source === "LiveLaw" ? "#1a6b3c" : "#7c3aed",
-        category: a.category || "General",
+        category: (a.category as string) || "General",
       }));
 
       // Fallback stub articles if RSS feeds are unavailable
@@ -88,8 +88,8 @@ export default function LegalNewsPage() {
 
       setItems(mapped);
       setFetchedAt(new Date().toISOString());
-    } catch (err: any) {
-      setError(err.message || "Could not load legal news.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not load legal news.");
     } finally {
       setIsLoading(false);
     }
@@ -110,7 +110,7 @@ export default function LegalNewsPage() {
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
         <div>
           <h1 className="font-display text-4xl font-semibold text-foreground mb-2">Indian Legal News</h1>
-          <p className="text-muted-foreground">Real-time updates from India's leading legal news publications.</p>
+          <p className="text-muted-foreground">Real-time updates from India&apos;s leading legal news publications.</p>
         </div>
 
         <div className="flex flex-col gap-4">

@@ -112,11 +112,11 @@ export async function POST(req: NextRequest) {
     const reply = applyGuardrails(rawReply);
 
     return NextResponse.json({ reply, IS_AI_GENERATED: true });
-  } catch (err: any) {
-    if (err.name === "AbortError") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
       return NextResponse.json({ error: "AI request timed out. Please retry." }, { status: 504 });
     }
-    console.error("[chat-api] Unexpected error:", err.message);
+    console.error("[chat-api] Unexpected error:", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 });
   }
 }
