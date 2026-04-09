@@ -170,7 +170,7 @@ export default function LandingPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {(Object.keys(LANGUAGES) as Language[]).map((l) => (
               <button key={l} onClick={() => { setLanguage(l); setMobileMenuOpen(false); }} style={{
-                padding: "12px", borderRadius: 12, border: "none", cursor: "pointer",
+                padding: "12px", borderRadius: 12, cursor: "pointer",
                 fontSize: 14, fontWeight: 500, fontFamily: "'Instrument Sans', sans-serif",
                 background: language === l ? "var(--forest)" : "var(--ivory)",
                 color: language === l ? "var(--ivory)" : "var(--ink)",

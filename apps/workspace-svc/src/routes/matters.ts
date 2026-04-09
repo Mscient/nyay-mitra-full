@@ -1,5 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { db, matters } from "@nyay-mitra/database";
+import { eq, and } from "drizzle-orm";
 
 const MatterSchema = z.object({
   title: z.string().min(5),
@@ -7,7 +9,8 @@ const MatterSchema = z.object({
   matterType: z.enum(["CRIMINAL", "CIVIL", "CORPORATE", "FAMILY", "TAX"]),
   courtCode: z.string().optional(),
   caseNumber: z.string().optional(),
-  description: z.string(),
+  description: z.string().optional(),
+  feesAgreed: z.string().optional(),
 });
 
 export const matterRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
@@ -15,13 +18,24 @@ export const matterRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
   fastify.post("/", async (request, reply) => {
     try {
       const data = MatterSchema.parse(request.body);
+      const { tenantId, advocateId } = request;
 
-      // TODO: Insert into Drizzle DB and link to client + tenant
-      
+      const [newMatter] = await db.insert(matters).values({
+        tenantId,
+        advocateId,
+        clientId: data.clientId,
+        title: data.title,
+        matterType: data.matterType,
+        courtCode: data.courtCode,
+        caseNumber: data.caseNumber,
+        descriptionEnc: data.description ? Buffer.from(data.description) : null,
+        feesAgreed: data.feesAgreed || null,
+      }).returning({ id: matters.id });
+
       return reply.status(201).send({
         success: true,
         message: `Matter '${data.title}' created successfully`,
-        matterId: "temp-uuid-generated-by-db",
+        matterId: newMatter.id,
       });
     } catch (err: any) {
       if (err instanceof z.ZodError) {
@@ -34,7 +48,24 @@ export const matterRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
 
   // GET MATTERS
   fastify.get("/", async (request, reply) => {
-    // TODO: Fetch from Drizzle DB using Tenant ID
-    return { matters: [] };
+    try {
+      const records = await db.select().from(matters)
+        .where(
+          and(
+            eq(matters.tenantId, request.tenantId),
+            eq(matters.advocateId, request.advocateId)
+          )
+        );
+      
+      const mapped = records.map(m => ({
+        ...m,
+        descriptionEnc: m.descriptionEnc ? m.descriptionEnc.toString() : "",
+      }));
+
+      return reply.send({ matters: mapped });
+    } catch (err: any) {
+      fastify.log.error(err);
+      return reply.status(500).send({ error: "Internal server error" });
+    }
   });
 };

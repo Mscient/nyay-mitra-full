@@ -1,0 +1,23 @@
+
+> rest-express@1.0.0 check
+> tsc
+
+server/routes.ts(430,11): error TS1005: ',' expected.
+server/routes.ts(430,114): error TS1005: ',' expected.
+server/routes.ts(433,11): error TS1003: Identifier expected.
+server/routes.ts(433,24): error TS1005: ',' expected.
+server/routes.ts(433,52): error TS1005: ',' expected.
+server/routes.ts(433,54): error TS1005: ',' expected.
+server/routes.ts(434,22): error TS1005: ',' expected.
+server/routes.ts(434,73): error TS1005: ':' expected.
+server/routes.ts(437,7): error TS1472: 'catch' or 'finally' expected.
+server/routes.ts(452,7): error TS1005: ',' expected.
+server/routes.ts(456,4): error TS1128: Declaration or statement expected.
+server/routes.ts(983,1): error TS1128: Declaration or statement expected.
+npm error Lifecycle script `check` failed with error:
+npm error code 1
+npm error path C:\Users\prash\Downloads\nyay-mitra-complete\nyay-mitra-full\apps\legacy-vite
+npm error workspace rest-express@1.0.0
+npm error location C:\Users\prash\Downloads\nyay-mitra-complete\nyay-mitra-full\apps\legacy-vite
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c tsc

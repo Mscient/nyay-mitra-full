@@ -10,15 +10,18 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "fastify": "^4.26.2",
     "@fastify/cors": "^8.5.0",
+    "@nyay-mitra/database": "*",
+    "@types/jsonwebtoken": "^9.0.10",
     "dotenv": "^16.4.5",
-    "zod": "^3.22.4",
-    "@nyay-mitra/database": "*"
+    "drizzle-orm": "^0.30.8",
+    "fastify": "^4.26.2",
+    "jsonwebtoken": "^9.0.3",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "typescript": "^5.4.3",
     "@types/node": "^20.11.30",
-    "tsx": "^4.7.1"
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.3"
   }
 }
