@@ -1,7 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { db, clients } from "@nyay-mitra/database";
-import { eq } from "drizzle-orm";
+import crypto from "crypto";
 
 const ClientSchema = z.object({
   fullName: z.string().min(2),
@@ -10,33 +9,49 @@ const ClientSchema = z.object({
   aadhaarId: z.string().regex(/^\d{4}-\d{4}-\d{4}$/, "Must be format XXXX-XXXX-1234"),
 });
 
+interface Client {
+  id: string;
+  tenantId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  aadhaarRef: string;
+  createdAt: string;
+}
+
+const clientStore = new Map<string, Client>();
+
 export const clientRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // CREATE CLIENT
   fastify.post("/", async (request, reply) => {
     try {
       const data = ClientSchema.parse(request.body);
       const { tenantId } = request;
-      
+
       // Sandbox Aadhaar Check
       if (!data.aadhaarId.startsWith("XXXX-XXXX-")) {
         return reply.status(400).send({ error: "Sandbox mode only accepts masked tests (XXXX-XXXX-1234)" });
       }
 
-      await db.insert(clients).values({
+      const id = crypto.randomUUID();
+      const client: Client = {
+        id,
         tenantId,
-        fullNameEnc: Buffer.from(data.fullName),
-        emailEnc: Buffer.from(data.email),
-        phoneEnc: Buffer.from(data.phone),
+        fullName: data.fullName,
+        email: data.email,
+        phone: data.phone,
         aadhaarRef: data.aadhaarId.slice(-4),
-      });
+        createdAt: new Date().toISOString(),
+      };
+      clientStore.set(id, client);
 
       return reply.status(201).send({
         success: true,
         message: "Client onboarded and Aadhaar verified via sandbox",
         clientData: {
           fullName: data.fullName,
-          aadhaarRef: data.aadhaarId.slice(-4)
-        }
+          aadhaarRef: data.aadhaarId.slice(-4),
+        },
       });
     } catch (err: any) {
       if (err instanceof z.ZodError) {
@@ -50,17 +65,16 @@ export const clientRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
   // GET CLIENTS
   fastify.get("/", async (request, reply) => {
     try {
-      const records = await db.select().from(clients).where(eq(clients.tenantId, request.tenantId));
-      
-      // Map Buffer back to string for response (MVP Phase 1)
-      const mapped = records.map(c => ({
-        id: c.id,
-        fullName: c.fullNameEnc ? c.fullNameEnc.toString() : "Unknown",
-        email: c.emailEnc ? c.emailEnc.toString() : "",
-        phone: c.phoneEnc ? c.phoneEnc.toString() : "",
-        aadhaarRef: c.aadhaarRef,
-        createdAt: c.createdAt,
-      }));
+      const mapped = [...clientStore.values()]
+        .filter(c => c.tenantId === request.tenantId)
+        .map(c => ({
+          id: c.id,
+          fullName: c.fullName,
+          email: c.email,
+          phone: c.phone,
+          aadhaarRef: c.aadhaarRef,
+          createdAt: c.createdAt,
+        }));
 
       return reply.send({ clients: mapped });
     } catch (err: any) {

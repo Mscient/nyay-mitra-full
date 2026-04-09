@@ -1,7 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { db, invoices, matters } from "@nyay-mitra/database";
-import { eq } from "drizzle-orm";
+import crypto from "crypto";
 
 const InvoiceSchema = z.object({
   matterId: z.string().uuid(),
@@ -11,11 +10,27 @@ const InvoiceSchema = z.object({
   dueDate: z.string().optional(),
 });
 
+interface Invoice {
+  id: string;
+  advocateId: string;
+  clientId: string;
+  matterId: string;
+  invoiceNumber: string;
+  amount: number;
+  gstAmount: number;
+  totalAmount: number;
+  dueDate?: string;
+  status: string;
+  createdAt: string;
+}
+
+const invoiceStore = new Map<string, Invoice>();
+
 export const invoiceRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // GET INVOICES
   fastify.get("/", async (request, reply) => {
     try {
-      const records = await db.select().from(invoices).where(eq(invoices.advocateId, request.advocateId));
+      const records = [...invoiceStore.values()].filter(i => i.advocateId === request.advocateId);
       return reply.send({ invoices: records });
     } catch (err: any) {
       fastify.log.error(err);
@@ -27,26 +42,30 @@ export const invoiceRoutes: FastifyPluginAsync = async (fastify: FastifyInstance
   fastify.post("/", async (request, reply) => {
     try {
       const data = InvoiceSchema.parse(request.body);
-      
+
       const invoiceNumber = `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000) + 1000}`;
       const totalAmount = data.amount + data.gstAmount;
+      const id = crypto.randomUUID();
 
-      const [newInvoice] = await db.insert(invoices).values({
+      const invoice: Invoice = {
+        id,
         advocateId: request.advocateId,
         clientId: data.clientId,
         matterId: data.matterId,
         invoiceNumber,
-        amount: String(data.amount),
-        gstAmount: String(data.gstAmount),
-        totalAmount: String(totalAmount),
+        amount: data.amount,
+        gstAmount: data.gstAmount,
+        totalAmount,
         dueDate: data.dueDate,
-        status: "DRAFT"
-      }).returning({ id: invoices.id });
+        status: "DRAFT",
+        createdAt: new Date().toISOString(),
+      };
+      invoiceStore.set(id, invoice);
 
       return reply.status(201).send({
         success: true,
         message: "Invoice created successfully",
-        invoiceId: newInvoice.id,
+        invoiceId: id,
         invoiceNumber,
       });
     } catch (err: any) {
@@ -60,12 +79,12 @@ export const invoiceRoutes: FastifyPluginAsync = async (fastify: FastifyInstance
 
   // SEND INVOICE
   fastify.post("/:id/send", async (request, reply) => {
-    // Input: { delivery_method: string }
     const { id } = request.params as { id: string };
-    
-    await db.update(invoices)
-      .set({ status: "SENT" })
-      .where(eq(invoices.id, id));
+
+    const existing = invoiceStore.get(id);
+    if (existing) {
+      invoiceStore.set(id, { ...existing, status: "SENT" });
+    }
 
     return reply.send({
       success: true,

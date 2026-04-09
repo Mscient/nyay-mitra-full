@@ -1,7 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { db, hearings, matters } from "@nyay-mitra/database";
-import { eq, and } from "drizzle-orm";
+import crypto from "crypto";
 
 const CreateHearingSchema = z.object({
   matterId: z.string().uuid(),
@@ -9,7 +8,7 @@ const CreateHearingSchema = z.object({
   courtCode: z.string().optional(),
   courtHall: z.string().optional(),
   judgeName: z.string().optional(),
-  purpose: z.string().optional(), // UI-friendly alias for orderSummary
+  purpose: z.string().optional(),
 });
 
 const HearingSchema = z.object({
@@ -18,6 +17,22 @@ const HearingSchema = z.object({
   orderSummary: z.string().optional(),
 });
 
+interface Hearing {
+  id: string;
+  matterId: string;
+  advocateId: string;
+  scheduledAt: string;
+  courtCode?: string;
+  courtHall?: string;
+  judgeName?: string;
+  orderSummary?: string;
+  status: string;
+  nextDate?: string;
+  createdAt: string;
+}
+
+const hearingStore = new Map<string, Hearing>();
+
 export const hearingRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // CREATE HEARING
   fastify.post("/", async (request, reply) => {
@@ -25,26 +40,22 @@ export const hearingRoutes: FastifyPluginAsync = async (fastify: FastifyInstance
       const data = CreateHearingSchema.parse(request.body);
       const { advocateId } = request;
 
-      // Verify the matter belongs to this advocate
-      const [matter] = await db.select({ id: matters.id })
-        .from(matters)
-        .where(and(eq(matters.id, data.matterId), eq(matters.advocateId, advocateId)));
-
-      if (!matter) {
-        return reply.status(404).send({ error: "Matter not found or not owned by this advocate" });
-      }
-
-      const [newHearing] = await db.insert(hearings).values({
+      const id = crypto.randomUUID();
+      const hearing: Hearing = {
+        id,
         matterId: data.matterId,
-        scheduledAt: new Date(data.scheduledAt),
+        advocateId,
+        scheduledAt: data.scheduledAt,
         courtCode: data.courtCode,
         courtHall: data.courtHall,
         judgeName: data.judgeName,
         orderSummary: data.purpose,
         status: "UPCOMING",
-      }).returning({ id: hearings.id });
+        createdAt: new Date().toISOString(),
+      };
+      hearingStore.set(id, hearing);
 
-      return reply.status(201).send({ success: true, hearingId: newHearing.id });
+      return reply.status(201).send({ success: true, hearingId: id });
     } catch (err: any) {
       if (err instanceof z.ZodError) {
         return reply.status(400).send({ error: "Validation failed", details: err.errors });
@@ -60,26 +71,9 @@ export const hearingRoutes: FastifyPluginAsync = async (fastify: FastifyInstance
       const { advocateId } = request;
       const matterIdFilter = (request.query as { matter_id?: string }).matter_id;
 
-      let query = db.select({
-        id: hearings.id,
-        scheduledAt: hearings.scheduledAt,
-        status: hearings.status,
-        courtCode: hearings.courtCode,
-        matterId: hearings.matterId,
-        matterTitle: matters.title
-      })
-      .from(hearings)
-      .leftJoin(matters, eq(hearings.matterId, matters.id))
-      .where(eq(matters.advocateId, advocateId));
+      const records = [...hearingStore.values()].filter(h => h.advocateId === advocateId);
 
-      await query;
-      // Drizzle ORM doesn't easily chain optional wheres dynamically like Knex without building an array of conditions,
-      // but for MVP we will fetch all that belong to the advocate.
-      
-      const records = await query;
-      
-      // Filter logically if matter_id provided
-      const filtered = matterIdFilter 
+      const filtered = matterIdFilter
         ? records.filter(r => r.matterId === matterIdFilter)
         : records;
 
@@ -96,14 +90,11 @@ export const hearingRoutes: FastifyPluginAsync = async (fastify: FastifyInstance
       const data = HearingSchema.parse(request.body);
       const { id } = request.params as { id: string };
 
-      await db.update(hearings)
-        .set({
-          status: data.status,
-          nextDate: data.nextDate,
-          orderSummary: data.orderSummary,
-        })
-        .where(eq(hearings.id, id));
-      
+      const existing = hearingStore.get(id);
+      if (existing) {
+        hearingStore.set(id, { ...existing, ...data });
+      }
+
       return reply.send({
         success: true,
         message: `Hearing ${id} updated successfully`,
@@ -119,11 +110,10 @@ export const hearingRoutes: FastifyPluginAsync = async (fastify: FastifyInstance
   });
 
   // SYNC ECOURTS
-  fastify.get("/sync-ecourts", async (request, reply) => {
-    // Input: { matter_id }
+  fastify.get("/sync-ecourts", async (_request, reply) => {
     return reply.send({
       success: true,
-      data: { synced_count: 0, new_dates: [] }
+      data: { synced_count: 0, new_dates: [] },
     });
   });
 };

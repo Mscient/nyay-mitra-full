@@ -1,7 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { db, matters } from "@nyay-mitra/database";
-import { eq, and } from "drizzle-orm";
+import crypto from "crypto";
 
 const MatterSchema = z.object({
   title: z.string().min(5),
@@ -13,6 +12,22 @@ const MatterSchema = z.object({
   feesAgreed: z.string().optional(),
 });
 
+interface Matter {
+  id: string;
+  tenantId: string;
+  advocateId: string;
+  clientId: string;
+  title: string;
+  matterType: string;
+  courtCode?: string;
+  caseNumber?: string;
+  description?: string;
+  feesAgreed?: string;
+  createdAt: string;
+}
+
+const matterStore = new Map<string, Matter>();
+
 export const matterRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // CREATE MATTER
   fastify.post("/", async (request, reply) => {
@@ -20,7 +35,9 @@ export const matterRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       const data = MatterSchema.parse(request.body);
       const { tenantId, advocateId } = request;
 
-      const [newMatter] = await db.insert(matters).values({
+      const id = crypto.randomUUID();
+      const matter: Matter = {
+        id,
         tenantId,
         advocateId,
         clientId: data.clientId,
@@ -28,14 +45,16 @@ export const matterRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         matterType: data.matterType,
         courtCode: data.courtCode,
         caseNumber: data.caseNumber,
-        descriptionEnc: data.description ? Buffer.from(data.description) : null,
-        feesAgreed: data.feesAgreed || null,
-      }).returning({ id: matters.id });
+        description: data.description,
+        feesAgreed: data.feesAgreed,
+        createdAt: new Date().toISOString(),
+      };
+      matterStore.set(id, matter);
 
       return reply.status(201).send({
         success: true,
         message: `Matter '${data.title}' created successfully`,
-        matterId: newMatter.id,
+        matterId: id,
       });
     } catch (err: any) {
       if (err instanceof z.ZodError) {
@@ -49,20 +68,11 @@ export const matterRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
   // GET MATTERS
   fastify.get("/", async (request, reply) => {
     try {
-      const records = await db.select().from(matters)
-        .where(
-          and(
-            eq(matters.tenantId, request.tenantId),
-            eq(matters.advocateId, request.advocateId)
-          )
-        );
-      
-      const mapped = records.map(m => ({
-        ...m,
-        descriptionEnc: m.descriptionEnc ? m.descriptionEnc.toString() : "",
-      }));
+      const records = [...matterStore.values()].filter(
+        m => m.tenantId === request.tenantId && m.advocateId === request.advocateId
+      );
 
-      return reply.send({ matters: mapped });
+      return reply.send({ matters: records });
     } catch (err: any) {
       fastify.log.error(err);
       return reply.status(500).send({ error: "Internal server error" });
