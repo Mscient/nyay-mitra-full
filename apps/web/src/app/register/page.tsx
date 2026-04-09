@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
 
-declare global { interface Window { google?: any; } }
+declare global { interface Window { google?: { accounts?: { id?: { initialize: (opts: Record<string, unknown>) => void; renderButton: (el: HTMLElement, opts: Record<string, unknown>) => void; } } }; } }
 const GOOGLE_CLIENT_ID = "450969618266-iom7rkqvkfh1teb4p3tlupsq1hlgh041.apps.googleusercontent.com";
 
 const LANGUAGES = {
@@ -57,7 +57,7 @@ export default function RegisterPage() {
     return () => { if (document.head.contains(script)) document.head.removeChild(script); };
   }, []);
 
-  async function handleGoogleResponse(response: any) {
+  async function handleGoogleResponse(_response: Record<string, unknown>) {
     setIsLoading(true); setGlobalError("");
     try {
       localStorage.setItem("nyay_token", "stub_google_jwt");
@@ -105,8 +105,8 @@ export default function RegisterPage() {
       localStorage.setItem("nyay_lang", lang);
       router.push(returnTo);
       router.refresh();
-    } catch (err: any) {
-      setGlobalError(err.message || "Registration failed. Please try again.");
+    } catch (err: unknown) {
+      setGlobalError(err instanceof Error ? err.message : "Registration failed. Please try again.");
     } finally {
       setIsLoading(false);
     }

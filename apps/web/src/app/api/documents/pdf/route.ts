@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
         "Content-Length": pdfBuffer.byteLength.toString(),
       },
     });
-  } catch (err: any) {
-    if (err.name === "TimeoutError") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "TimeoutError") {
       return NextResponse.json({ error: "PDF generation timed out (>30s)" }, { status: 504 });
     }
     // docgen-svc not running — tell the frontend to fall back to HTML download

@@ -93,11 +93,12 @@ export async function POST(req: Request) {
     const aiBody = data.choices?.[0]?.message?.content || "";
 
     return NextResponse.json({ success: true, aiBody, ai_generated: true });
-  } catch (err: any) {
-    console.error("[AI Doc Body Error]", err.message);
-    if (err.name === 'AbortError') {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[AI Doc Body Error]", message);
+    if (err instanceof Error && err.name === 'AbortError') {
       return NextResponse.json({ error: "Document generation timed out. Please try again." }, { status: 504 });
     }
-    return NextResponse.json({ error: "AI generation failed. Please try again.", details: err.message }, { status: 500 });
+    return NextResponse.json({ error: "AI generation failed. Please try again.", details: message }, { status: 500 });
   }
 }

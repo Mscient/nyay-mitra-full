@@ -78,19 +78,28 @@ async function searchIndianKanoon(query: string, apiKey: string, limit: number) 
 
   // Map IK response format → our standard format
   const docs = (data.docs || []).slice(0, limit);
-  return docs.map((doc: any, i: number) => ({
-    id: doc.tid?.toString() || `ik-${i}`,
-    case_title: doc.title || "Untitled",
-    case_number: doc.citation || doc.docsource || "",
-    court_type: doc.docsource || "Indian Court",
-    year_decided: doc.publishdate ? parseInt(doc.publishdate.split("-")[0]) : 0,
-    issue_categories: (doc.headline || "").replace(/<[^>]*>/g, ""),
-    summary: (doc.headline || doc.fragment || "").replace(/<[^>]*>/g, "").substring(0, 400),
-    legal_principles: JSON.stringify([]),
-    precedent_value: 80,
-    source: "indiankanoon",
-    ik_link: `https://indiankanoon.org/doc/${doc.tid}/`,
-  }));
+  return docs.map((doc: Record<string, unknown>, i: number) => {
+    const tid = doc.tid as string | number | undefined;
+    const title = (doc.title as string) || "Untitled";
+    const citation = (doc.citation as string) || "";
+    const docsource = (doc.docsource as string) || "Indian Court";
+    const publishdate = doc.publishdate as string | undefined;
+    const headline = (doc.headline as string) || "";
+    const fragment = (doc.fragment as string) || "";
+    return {
+      id: tid?.toString() || `ik-${i}`,
+      case_title: title,
+      case_number: citation || docsource,
+      court_type: docsource,
+      year_decided: publishdate ? parseInt(publishdate.split("-")[0]) : 0,
+      issue_categories: headline.replace(/<[^>]*>/g, ""),
+      summary: (headline || fragment).replace(/<[^>]*>/g, "").substring(0, 400),
+      legal_principles: JSON.stringify([]),
+      precedent_value: 80,
+      source: "indiankanoon",
+      ik_link: `https://indiankanoon.org/doc/${tid}/`,
+    };
+  });
 }
 
 // ── Route handler ────────────────────────────────────────────────────────────
@@ -121,8 +130,8 @@ export async function GET(request: NextRequest) {
         source: "indiankanoon_api",
         _note: "Live results from IndianKanoon API (30M+ documents)",
       });
-    } catch (err: any) {
-      console.error("[IndianKanoon API Error]", err.message);
+    } catch (err: unknown) {
+      console.error("[IndianKanoon API Error]", err instanceof Error ? err.message : err);
       // Fall through to mock dataset
     }
   }

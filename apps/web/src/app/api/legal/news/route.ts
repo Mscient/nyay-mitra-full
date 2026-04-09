@@ -79,8 +79,8 @@ export async function GET() {
           const category = detectCategory(title + " " + rawDesc, defaultCategory);
           articles.push({ title, link, pubDate, description: rawDesc, source, category });
         }
-      } catch (err: any) {
-        console.error(`[News] Error fetching ${url}:`, err.message);
+      } catch (err: unknown) {
+        console.error(`[News] Error fetching ${url}:`, err instanceof Error ? err.message : err);
       }
     })
   );

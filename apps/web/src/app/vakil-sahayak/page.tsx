@@ -22,6 +22,26 @@ export interface CaseResult {
   legal_principles?: string;
 }
 
+export interface ClientRecord {
+  id: string;
+  fullName?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  aadhaarId?: string;
+  aadhaarRef?: string;
+  case_title?: string;
+}
+
+export interface HearingRecord {
+  id: string;
+  client_name: string;
+  purpose: string;
+  hearing_date: string;
+  court: string;
+  status: string;
+}
+
 type TabId = "search" | "tracker" | "drafts" | "calendar";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
@@ -123,8 +143,8 @@ function ServiceUnavailable() {
 // ─── ADD CLIENT MODAL ──────────────────────────────────────────────────────
 function AddClientModal({ onClose, onAdded, editing, apiCall }: {
   onClose: () => void;
-  onAdded: (c: any) => void;
-  editing?: any;
+  onAdded: (c: ClientRecord) => void;
+  editing?: ClientRecord;
   apiCall: ReturnType<typeof useApiCall>;
 }) {
   const [form, setForm] = useState({
@@ -150,10 +170,10 @@ function AddClientModal({ onClose, onAdded, editing, apiCall }: {
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Failed to save.");
       if (d._dev) throw new Error("workspace-svc is not running. Start it first.");
-      onAdded({ ...form, id: d.clientId || editing?.id, fullName: form.fullName });
+      onAdded({ ...form, id: d.clientId || editing?.id || "", fullName: form.fullName });
       onClose();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setSaving(false);
     }
@@ -170,7 +190,7 @@ function AddClientModal({ onClose, onAdded, editing, apiCall }: {
           <div className="grid grid-cols-2 gap-4">
             {[["fullName", "Client Name *"], ["phone", "Phone Number"]].map(([k, l]) => (
               <div key={k}><label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">{l}</label>
-                <input value={(form as any)[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
+                <input value={(form as Record<string, string>)[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
                   className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-muted/30 focus:outline-none focus:ring-2 focus:ring-secondary/50" /></div>
             ))}
           </div>
@@ -198,10 +218,10 @@ function AddClientModal({ onClose, onAdded, editing, apiCall }: {
 }
 
 // ─── ADD HEARING MODAL ────────────────────────────────────────────────
-function AddHearingModal({ onClose, onAdded, clients, apiCall }: {
+function AddHearingModal({ onClose, onAdded, clients, apiCall: _apiCall }: {
   onClose: () => void;
-  onAdded: (h: any) => void;
-  clients: any[];
+  onAdded: (h: HearingRecord) => void;
+  clients: ClientRecord[];
   apiCall: ReturnType<typeof useApiCall>;
 }) {
   const [form, setForm] = useState({ clientId: "", purpose: "", scheduledAt: "", court: "" });
@@ -226,8 +246,8 @@ function AddHearingModal({ onClose, onAdded, clients, apiCall }: {
       };
       onAdded(localHearing);
       onClose();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setSaving(false);
     }
@@ -294,14 +314,14 @@ export default function VakilSahayakPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
 
   // ── Clients state ──
-  const [clients, setClients] = useState<any[]>([]);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [clientsError, setClientsError] = useState("");
   const [showAddClient, setShowAddClient] = useState(false);
-  const [editingClient, setEditingClient] = useState<any>(null);
+  const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
 
   // ── Hearings state ──
-  const [hearings, setHearings] = useState<any[]>([]);
+  const [hearings, setHearings] = useState<HearingRecord[]>([]);
   const [hearingsLoading, setHearingsLoading] = useState(false);
   const [showAddHearing, setShowAddHearing] = useState(false);
 
@@ -336,8 +356,9 @@ export default function VakilSahayakPage() {
       if (d._dev) { setClientsError("workspace-svc"); return; }
       if (!res.ok) throw new Error(d.error);
       setClients(d.clients || []);
-    } catch (err: any) {
-      setClientsError(err.message?.includes("workspace") ? "workspace-svc" : err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setClientsError(msg.includes("workspace") ? "workspace-svc" : msg);
     } finally {
       setClientsLoading(false);
     }
@@ -350,13 +371,13 @@ export default function VakilSahayakPage() {
       const d = await res.json();
       if (d._dev || !res.ok) return;
       // Map workspace-svc format → UI format
-      const mapped = (d.hearings || []).map((h: any) => ({
-        id: h.id,
-        client_name: h.matterTitle || "Unknown",
-        purpose: h.orderSummary || "Hearing",
-        hearing_date: h.scheduledAt,
-        court: h.courtCode || "",
-        status: h.status,
+      const mapped = (d.hearings || []).map((h: Record<string, unknown>) => ({
+        id: (h.id as string) || "",
+        client_name: (h.matterTitle as string) || "Unknown",
+        purpose: (h.orderSummary as string) || "Hearing",
+        hearing_date: (h.scheduledAt as string) || "",
+        court: (h.courtCode as string) || "",
+        status: (h.status as string) || "",
       }));
       setHearings(mapped);
     } finally {
@@ -371,11 +392,11 @@ export default function VakilSahayakPage() {
       const res = await fetch(`/api/legal/search/semantic?q=${encodeURIComponent(q)}&limit=10`);
       if (res.ok) {
         const data = await res.json();
-        setResults((data.results || data).map((r: any) => ({
-          id: r.id.toString(), title: r.case_title, citation: r.case_number || "Citation Missing",
-          court: r.court_type || "Court", year: r.year_decided, section: [],
-          topic: r.issue_categories, summary: r.summary, goodLaw: r.precedent_value > 60,
-          legal_principles: r.legal_principles,
+        setResults((data.results || data).map((r: Record<string, unknown>) => ({
+          id: String(r.id), title: (r.case_title as string) || "", citation: (r.case_number as string) || "Citation Missing",
+          court: (r.court_type as string) || "Court", year: (r.year_decided as number) || 0, section: [],
+          topic: (r.issue_categories as string) || "", summary: (r.summary as string) || "", goodLaw: (r.precedent_value as number) > 60,
+          legal_principles: r.legal_principles as string | undefined,
         })));
       } else setSearchError("Search failed. Please retry.");
     } catch { setSearchError("Network error occurred while searching."); }
@@ -456,7 +477,6 @@ export default function VakilSahayakPage() {
   }
 
   const selectedDocInfo = DOCUMENT_TYPES.find(d => d.id === selectedDocType);
-  const GATED_TABS: TabId[] = ["tracker", "drafts", "calendar"];
 
   return (
     <div className="min-h-screen bg-background font-sans flex flex-col">

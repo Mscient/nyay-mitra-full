@@ -38,7 +38,7 @@ export default function CaseStatusPage() {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed to fetch case."); }
       const d = await res.json();
       setCaseData(d.data); setSource(d.source); setState("success");
-    } catch (err: any) { setError(err.message || "Could not fetch case details. Please try again."); setState("error"); }
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Could not fetch case details. Please try again."); setState("error"); }
   }
 
   const isMock = source === "mock";
