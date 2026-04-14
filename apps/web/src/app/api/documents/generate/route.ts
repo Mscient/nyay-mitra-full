@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid document type" }, { status: 400 });
     }
 
-    const apiKey = process.env.SARVAM_API_KEY;
+    const apiKey = process.env.SARVAM_API_KEY?.trim();
     if (!apiKey) {
       return NextResponse.json(
         { error: "AI body generation unavailable. SARVAM_API_KEY not configured.", fallback: true },
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       ? "\n\nIMPORTANT: Write in formal Marathi (Devanagari script)."
       : "";
 
-    const response = await fetch("https://api.sarvam.ai/chat/completions", {
+    const response = await fetch("https://api.sarvam.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -90,7 +90,9 @@ export async function POST(req: Request) {
     }
 
     const data = await response.json();
-    const aiBody = data.choices?.[0]?.message?.content || "";
+    const rawContent = data.choices?.[0]?.message?.content || "";
+    // Strip <think>...</think> reasoning blocks returned by the model
+    const aiBody = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
     return NextResponse.json({ success: true, aiBody, ai_generated: true });
   } catch (err: any) {
