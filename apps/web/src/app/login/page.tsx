@@ -21,6 +21,8 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [globalError, setGlobalError] = useState("");
   
+  const isAdvocateFlow = returnTo.includes("vakil-sahayak");
+  
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -125,8 +127,30 @@ function LoginForm() {
       <div style={{ background: "var(--ivory)", width: "100%", maxWidth: 420, borderRadius: 24, border: "1px solid var(--border-color)", padding: "40px 32px", boxShadow: "0 10px 40px rgba(0,0,0,0.03)" }}>
         <div style={{ marginBottom: 32 }}>
           <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: "var(--ink)", marginBottom: 8 }}>Welcome Back</h2>
-          <p style={{ fontSize: 14, color: "var(--ink-muted)", lineHeight: 1.5 }}>Sign in to save your consultations and tracking history.</p>
+          <p style={{ fontSize: 14, color: "var(--ink-muted)", lineHeight: 1.5 }}>
+            {isAdvocateFlow ? "Sign in to access your Vakil Sahayak advocate portal." : "Sign in to save your consultations and tracking history."}
+          </p>
         </div>
+
+        {/* Advocate value-prop callout — only on /vakil-sahayak flow */}
+        {isAdvocateFlow && (
+          <div style={{ marginBottom: 24, padding: "16px 20px", background: "rgba(26,46,26,0.04)", border: "1px solid rgba(26,46,26,0.12)", borderRadius: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>Advocates get access to</div>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 7 }}>
+              {[
+                ["🔍", "Case Law Research — 30M+ SC & HC judgments via IndianKanoon, semantic search"],
+                ["👤", "Client CRM — manage matters, documents, and case status"],
+                ["📅", "Hearing Diary — court calendar with urgency alerts"],
+                ["✍️", "Draft Studio — 7 document types, AI-formatted, ready for certification"],
+              ].map(([icon, text]) => (
+                <li key={text} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "var(--ink-mid)", lineHeight: 1.4 }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>{icon}</span>
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div ref={googleBtnRef} style={{ width: "100%", marginBottom: 24, minHeight: 40 }} />
 

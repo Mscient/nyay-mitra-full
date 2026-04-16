@@ -32,6 +32,8 @@ function RegisterForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [globalError, setGlobalError] = useState("");
   
+  const isAdvocateFlow = returnTo.includes("vakil-sahayak");
+  
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -136,8 +138,20 @@ function RegisterForm() {
 
       <div style={{ background: "var(--ivory)", width: "100%", maxWidth: 420, borderRadius: 24, border: "1px solid var(--border-color)", padding: "40px 32px", boxShadow: "0 10px 40px rgba(0,0,0,0.03)" }}>
         <div style={{ marginBottom: 32 }}>
-          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: "var(--ink)", marginBottom: 8 }}>Create Account</h2>
-          <p style={{ fontSize: 14, color: "var(--ink-muted)", lineHeight: 1.5 }}>Get free legal guidance in your preferred language.</p>
+          {isAdvocateFlow ? (
+            <>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(201,146,10,0.1)", border: "1px solid rgba(201,146,10,0.2)", padding: "5px 12px", borderRadius: 20, marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--gold)" }}>For Advocates</span>
+              </div>
+              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: "var(--ink)", marginBottom: 8 }}>Join as Advocate</h2>
+              <p style={{ fontSize: 14, color: "var(--ink-muted)", lineHeight: 1.5 }}>Create your free account to access the Vakil Sahayak portal — case research, client CRM, hearing diary, and AI draft studio.</p>
+            </>
+          ) : (
+            <>
+              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: "var(--ink)", marginBottom: 8 }}>Create Account</h2>
+              <p style={{ fontSize: 14, color: "var(--ink-muted)", lineHeight: 1.5 }}>Get free legal guidance in your preferred language.</p>
+            </>
+          )}
         </div>
 
         <div ref={googleBtnRef} style={{ width: "100%", marginBottom: 24, minHeight: 40 }} />

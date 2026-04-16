@@ -279,10 +279,11 @@ export default function VakilSahayakPage() {
   const [activeTab, setActiveTab] = useState<TabId>("search");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Check auth on mount
+  // Check auth on mount — any non-empty token is valid at the UI gate.
+  // Real authorization is enforced server-side by workspace-svc / identity-svc.
   useEffect(() => {
     const token = localStorage.getItem("nyay_token");
-    setIsLoggedIn(!!token && token !== "stub_google_jwt");
+    setIsLoggedIn(!!token);
   }, []);
 
   // ── Case Search state ──
@@ -607,7 +608,56 @@ export default function VakilSahayakPage() {
 
           {/* ══ MY CLIENTS (auth gated) ══ */}
           {activeTab === "tracker" && (
-            !isLoggedIn ? <LoginBanner returnTo="/vakil-sahayak" /> : (
+            !isLoggedIn ? (
+              <div className="max-w-4xl mx-auto space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="t-heading mb-1">My Clients</h1>
+                    <p className="text-sm text-muted-foreground">Your private client CRM — matters, documents, status</p>
+                  </div>
+                </div>
+                {/* Preview cards — blurred sample data */}
+                <div className="relative">
+                  <div className="space-y-3 pointer-events-none select-none">
+                    {[{n:"Ramesh Sharma",c:"State v. Sharma — Bail Petition, Sessions Court"},{n:"Priya Nair",c:"Nair v. Builder — Consumer Forum Complaint"},{n:"Aakash Verma",c:"Verma v. XYZ Corp — Section 138 NI Act"}].map((cl,i) => (
+                      <div key={i} className="bg-card border border-border rounded-xl p-4 sm:p-5 flex items-center gap-4 blur-sm opacity-60">
+                        <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-display text-xl font-bold shrink-0">{cl.n[0]}</div>
+                        <div className="flex-1 space-y-1">
+                          <div className="font-display text-lg font-semibold">{cl.n}</div>
+                          <div className="text-sm text-muted-foreground">{cl.c}</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="h-8 w-8 rounded bg-muted" />
+                          <div className="h-8 w-8 rounded bg-muted" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Sign-in overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-background/60 backdrop-blur-[2px] rounded-2xl">
+                    <div className="text-center space-y-2">
+                      <div className="text-3xl">🔐</div>
+                      <h3 className="font-display text-xl font-semibold">Unlock Client CRM</h3>
+                      <p className="text-sm text-muted-foreground max-w-xs">Sign in as an advocate to manage client matters, track case status, and store documents — all in one place.</p>
+                    </div>
+                    <Link href="/login?returnTo=/vakil-sahayak" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm" style={{background:"var(--forest)",color:"var(--gold-pale)"}}>
+                      <LogIn size={16}/> Sign In to Unlock
+                    </Link>
+                    <Link href="/register?returnTo=/vakil-sahayak" className="text-xs text-muted-foreground hover:underline">New here? Create a free advocate account →</Link>
+                  </div>
+                </div>
+                {/* Feature bullets */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  {[["📂","Matter Tracking","Create client matters, attach case numbers and notes"],["📎","Document Vault","Link generated drafts directly to client records"],["🔔","Status Alerts","Get notified on upcoming hearings"]].map(([icon,title,desc])=>(
+                    <div key={title} className="p-4 rounded-xl border border-border bg-card/50 space-y-1">
+                      <div className="text-xl">{icon}</div>
+                      <div className="font-semibold text-sm">{title}</div>
+                      <div className="text-xs text-muted-foreground">{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
               <div className="max-w-4xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -668,7 +718,47 @@ export default function VakilSahayakPage() {
 
           {/* ══ DRAFT STUDIO (auth gated) ══ */}
           {activeTab === "drafts" && (
-            !isLoggedIn ? <LoginBanner returnTo="/vakil-sahayak" /> : (
+            !isLoggedIn ? (
+              <div className="max-w-5xl mx-auto space-y-6">
+                <div>
+                  <h1 className="t-heading mb-1">Draft Studio</h1>
+                  <p className="text-sm text-muted-foreground">AI-generated legal documents — formatted, cite-ready, and awaiting your certification</p>
+                </div>
+                <div className="relative">
+                  {/* Preview grid — blurred */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pointer-events-none select-none blur-sm opacity-60">
+                    {DOCUMENT_TYPES.map(doc => (
+                      <div key={doc.id} className="bg-card border rounded-xl p-5 space-y-2">
+                        <div className="text-2xl">{doc.icon}</div>
+                        <div className="font-display text-base font-semibold leading-tight">{doc.title}</div>
+                        <div className="text-xs text-secondary font-semibold">{doc.subtitle}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Sign-in overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-background/60 backdrop-blur-[2px] rounded-2xl">
+                    <div className="text-center space-y-2">
+                      <div className="text-3xl">✍️</div>
+                      <h3 className="font-display text-xl font-semibold">Unlock Draft Studio</h3>
+                      <p className="text-sm text-muted-foreground max-w-xs">Generate bail petitions, RTI applications, legal notices, co-founder agreements — formatted in official court style, ready for your review and signature.</p>
+                    </div>
+                    <Link href="/login?returnTo=/vakil-sahayak" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm" style={{background:"var(--forest)",color:"var(--gold-pale)"}}>
+                      <LogIn size={16}/> Sign In to Unlock
+                    </Link>
+                    <Link href="/register?returnTo=/vakil-sahayak" className="text-xs text-muted-foreground hover:underline">New here? Create a free advocate account →</Link>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  {[["⚖️","7 Document Types","Bail petitions, RTI, legal notices, consumer complaints, affidavits, startup agreements"],["🤖","Sarvam AI Drafting","Fills the body in official language — you review and certify"],["📄","PDF / Print Ready","One-click download in court-filing format"]].map(([icon,title,desc])=>(
+                    <div key={title} className="p-4 rounded-xl border border-border bg-card/50 space-y-1">
+                      <div className="text-xl">{icon}</div>
+                      <div className="font-semibold text-sm">{title}</div>
+                      <div className="text-xs text-muted-foreground">{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
               <div className="max-w-5xl mx-auto space-y-6">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
@@ -731,7 +821,7 @@ export default function VakilSahayakPage() {
                       <Card className="flex flex-col overflow-hidden border-secondary/30">
                         <div className="px-4 py-3 border-b border-secondary/20 bg-secondary/5 flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-secondary flex-1">
-                            {docAiGenerated ? "🤖 AI-Generated — Official Format" : "📄 Official Format"}
+                            {docAiGenerated ? "🤖 AI-Generated — Advocate Review Draft" : "📄 Official Format — Advocate Review Draft"}
                           </span>
                           <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handlePrintDraft}>🖨️ Print / PDF</Button>
                           <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={handleDownloadDraft} disabled={pdfLoading}>
@@ -741,8 +831,15 @@ export default function VakilSahayakPage() {
                         <iframe ref={draftIframeRef} srcDoc={docHtml}
                           style={{ width: "100%", height: 560, border: "none", background: "#f0ebe3" }}
                           title="Official Document Preview" />
-                        <div className="px-4 py-2.5 bg-amber-500/10 border-t border-amber-500/20 text-xs text-amber-700 font-medium">
-                          ⚠️ DRAFT — Must be reviewed and certified by a licensed Advocate before filing.
+                        <div className="px-4 py-3 bg-emerald-500/8 border-t border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                          <div className="flex-1">
+                            <p className="text-xs font-semibold text-emerald-700">✅ Ready for Advocate Review &amp; Certification</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">This draft is formatted for filing. Your review, corrections, and signature make it a fully executed document.</p>
+                          </div>
+                          <Button size="sm" variant="outline" className="h-8 text-xs shrink-0 border-emerald-600/30 text-emerald-700 hover:bg-emerald-500/10"
+                            onClick={() => alert("Certification workflow coming soon. You can currently download & sign manually.")}>
+                            🖊️ Request Certification
+                          </Button>
                         </div>
                       </Card>
                     )}
@@ -754,7 +851,53 @@ export default function VakilSahayakPage() {
 
           {/* ══ HEARINGS (auth gated) ══ */}
           {activeTab === "calendar" && (
-            !isLoggedIn ? <LoginBanner returnTo="/vakil-sahayak" /> : (
+            !isLoggedIn ? (
+              <div className="max-w-4xl mx-auto space-y-6">
+                <div>
+                  <h1 className="t-heading mb-1">Hearing Diary</h1>
+                  <p className="text-sm text-muted-foreground">Your private court calendar — upcoming hearings, deadlines, and urgency alerts</p>
+                </div>
+                <div className="relative">
+                  {/* Preview cards — blurred sample hearings */}
+                  <div className="space-y-3 pointer-events-none select-none blur-sm opacity-60">
+                    {[{d:"24",m:"APR",n:"Sharma v. State",p:"Arguments on bail",c:"Sessions Court, Hall 3",u:true},{d:"02",m:"MAY",n:"Nair v. Builder",p:"Consumer Forum - First hearing",c:"District Consumer Forum",u:false},{d:"15",m:"MAY",n:"Verma v. XYZ",p:"Section 138 - Cheque bounce arguments",c:"Metropolitan Magistrate",u:false}].map((h,i)=>(
+                      <div key={i} className={`bg-card border rounded-xl p-4 sm:p-5 flex items-center gap-4 ${h.u?"border-destructive/30":""}`}>
+                        <div className={`h-16 w-14 rounded-xl flex flex-col items-center justify-center shrink-0 ${h.u?"bg-destructive/10 text-destructive":"bg-primary/5 text-primary"}`}>
+                          <span className="font-display text-2xl font-bold leading-none">{h.d}</span>
+                          <span className="text-[10px] font-semibold uppercase mt-1 tracking-wider">{h.m}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-display text-base font-semibold truncate">{h.n} — {h.p}</h3>
+                          <p className="text-sm text-muted-foreground truncate">{h.c}</p>
+                        </div>
+                        <div className={`text-sm font-semibold ${h.u?"text-destructive":"text-muted-foreground"}`}>{h.u?"Today":"Upcoming"}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Sign-in overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-background/60 backdrop-blur-[2px] rounded-2xl">
+                    <div className="text-center space-y-2">
+                      <div className="text-3xl">📅</div>
+                      <h3 className="font-display text-xl font-semibold">Unlock Hearing Diary</h3>
+                      <p className="text-sm text-muted-foreground max-w-xs">Add upcoming court dates, get urgency alerts for hearings within 3 days, and keep your entire diary in one place.</p>
+                    </div>
+                    <Link href="/login?returnTo=/vakil-sahayak" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm" style={{background:"var(--forest)",color:"var(--gold-pale)"}}>
+                      <LogIn size={16}/> Sign In to Unlock
+                    </Link>
+                    <Link href="/register?returnTo=/vakil-sahayak" className="text-xs text-muted-foreground hover:underline">New here? Create a free advocate account →</Link>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  {[["🔴","Urgency Alerts","Hearings within 3 days shown in red — never miss a date"],["📋","Linked Matters","Each hearing linked to a client matter from your CRM"],["⏱️","Full History","Past hearings archived for reference and reporting"]].map(([icon,title,desc])=>(
+                    <div key={title} className="p-4 rounded-xl border border-border bg-card/50 space-y-1">
+                      <div className="text-xl">{icon}</div>
+                      <div className="font-semibold text-sm">{title}</div>
+                      <div className="text-xs text-muted-foreground">{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
               <div className="max-w-4xl mx-auto space-y-6">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>

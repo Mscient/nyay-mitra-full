@@ -40,7 +40,7 @@ const CITIZEN_FEATURES = [
 ];
 
 const LAWYER_FEATURES = [
-  "Semantic search across 50,000+ Supreme Court & HC judgments",
+  "Semantic search across 30M+ Supreme Court & HC judgments via IndianKanoon",
   "Precedent strength — good law vs overruled, instantly",
   "Section 436A undertrial tracker with automatic bail alerts",
   "AI-assisted draft studio and hearing calendar",
@@ -277,12 +277,22 @@ export default function LandingPage() {
               I Am a Lawyer →
             </button>
           </Link>
+          <Link href="/register?returnTo=/vakil-sahayak">
+            <button style={{
+              fontFamily: "'Instrument Sans', sans-serif", fontSize: 14, fontWeight: 500,
+              padding: "14px 28px", background: "rgba(201,146,10,0.12)", color: "var(--gold)",
+              border: "1.5px solid rgba(201,146,10,0.3)", borderRadius: 10, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 10, transition: "all 0.25s"
+            }}>
+              ⚖️ Sign Up as Advocate
+            </button>
+          </Link>
         </div>
 
         <div className="gold-rule animate-fade-up" />
 
         <div className="animate-fade-up" style={{ display: "flex", gap: 48, flexWrap: "wrap" }}>
-          {[["22+","Indian Languages"],["50K+","Case Laws Indexed"],["84M","Citizens Underserved"],["Free","For NALSA Eligible"]].map(([n,l]) => (
+          {[["22+","Indian Languages"],["30M+","Case Laws Indexed"],["84M","Citizens Underserved"],["Free","For NALSA Eligible"]].map(([n,l]) => (
             <div key={l}>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 40, fontWeight: 600, color: "var(--forest)", lineHeight: 1 }}>{n}</div>
               <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: 0.5, color: "var(--ink-muted)", marginTop: 4 }}>{l}</div>
@@ -345,8 +355,11 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 24, paddingTop: 20, borderTop: "1px solid var(--border-gold)" }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--forest)" }}>Enter Vakil Sahayak</span>
-                  <Link href="/vakil-sahayak" onClick={e => e.stopPropagation()}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--forest)", display: "block" }}>Enter Vakil Sahayak</span>
+                    <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>Free · Case research available instantly</span>
+                  </div>
+                  <Link href="/register?returnTo=/vakil-sahayak" onClick={e => e.stopPropagation()}>
                     <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--forest)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ivory)", fontSize: 16 }}>→</div>
                   </Link>
                 </div>
