@@ -1,15 +1,27 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/mysql2';
+import mysql from 'mysql2/promise';
 import * as schema from './schema';
 
-// This file initializes a singleton Database connection pool for the Monorepo
+// ── Validate connection string exists ────────────────────────────────────────
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  throw new Error(
+    '[nyay-mitra/database] DATABASE_URL is not set.\n' +
+    'Add it to your .env file:\n' +
+    '  DATABASE_URL=mysql://root:yourpassword@localhost:3306/nyay_mitra\n'
+  );
+}
 
-const connectionString = process.env.DATABASE_URL || "postgres://postgres:nyaymitrapass@localhost:5432/nyay_mitra";
+// ── Singleton connection pool ─────────────────────────────────────────────────
+const pool = mysql.createPool({
+  uri: DATABASE_URL,
+  connectionLimit: 10,
+  waitForConnections: true,
+  queueLimit: 0,
+});
 
-// Disable prefetch to support serverless / fastify environments efficiently
-const client = postgres(connectionString, { prepare: false });
+export const db = drizzle(pool, { schema, mode: 'default', logger: process.env.DB_LOG === 'true' });
 
-export const db = drizzle(client, { schema });
-
-// Export everything from schema so consuming microservices can define fields and queries
+// Export everything for consuming services
 export * from './schema';
+export { schema };

@@ -5,10 +5,14 @@ const DOCGEN_SVC_URL = process.env.DOCGEN_SVC_URL || "http://localhost:4003";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const authHeader = request.headers.get("authorization");
 
     const response = await fetch(`${DOCGEN_SVC_URL}/v1/docgen/pdf`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(authHeader ? { "Authorization": authHeader } : {}),
+      },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30000), // PDF gen can take up to 30s
     });

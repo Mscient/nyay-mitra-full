@@ -6,15 +6,18 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "generate": "drizzle-kit generate",
-    "push": "drizzle-kit push"
+    "generate": "drizzle-kit generate:mysql",
+    "push": "drizzle-kit push:mysql",
+    "studio": "drizzle-kit studio",
+    "check": "drizzle-kit check:mysql"
   },
   "dependencies": {
     "drizzle-orm": "^0.30.8",
-    "postgres": "^3.4.4"
+    "mysql2": "^3.9.7"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.20.14",
+    "drizzle-kit": "^0.20.18",
+    "dotenv": "^16.4.5",
     "typescript": "^5.4.3",
     "@types/node": "^20.11.30"
   }

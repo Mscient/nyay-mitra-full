@@ -1,47 +1,45 @@
-// identity-svc — Real Auth Service
-// bcrypt cost 12 | HS256 JWT | refresh token rotation | in-memory store (DB-ready)
-// Complies with .cursor/rules: rate-limit, no hardcoded secrets, PII handling
+// identity-svc — Production Auth Service
+// MySQL 8.0 persistence via Drizzle ORM  ·  bcrypt cost 12  ·  HS256 JWT
+// Refresh token rotation  ·  Zod validation  ·  Rate limiting  ·  Helmet headers
+// Complies with .cursor/rules: no hardcoded secrets, PII handling, DPDP Act 2023
+// NOTE: MySQL does not support RETURNING — use insert-then-select pattern throughout.
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import dotenv from "dotenv";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, users, tenants, sessions } from "@nyay-mitra/database";
 
 dotenv.config();
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString("hex");
-const JWT_EXPIRY = "15m";          // Short-lived access tokens
-const REFRESH_EXPIRY = "30d";       // Long-lived refresh tokens
-const BCRYPT_COST = 12;             // As per .cursor/rules
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error("JWT_SECRET must be set in environment variables");
+const JWT_EXPIRY = "15m";
+const REFRESH_EXPIRY_DAYS = 30;
+const BCRYPT_COST = 12;
 
-// ── In-memory store (swap for Drizzle + PostgreSQL when DB is provisioned) ───
-interface UserRecord {
-  id: string;
-  tenantId: string;
-  email: string;
-  passwordHash: string;
-  name: string;
-  userType: "CITIZEN" | "ADVOCATE";
-  lang: string;
-  createdAt: string;
-}
+// ── Zod Schemas ───────────────────────────────────────────────────────────────
+const RegisterSchema = z.object({
+  name: z.string().min(2).max(100).trim(),
+  email: z.string().email().toLowerCase(),
+  password: z.string().min(8).max(128),
+  userType: z.enum(["CITIZEN", "ADVOCATE", "STUDENT", "ORG_ADMIN"]).default("CITIZEN"),
+  lang: z.string().default("en"),
+  bciNumber: z.string().optional(),
+});
 
-interface RefreshTokenRecord {
-  userId: string;
-  tenantId: string;
-  token: string;
-  expiresAt: Date;
-}
-
-const users = new Map<string, UserRecord>();             // email → user
-const usersById = new Map<string, UserRecord>();         // id → user
-const refreshTokens = new Map<string, RefreshTokenRecord>(); // token → record
+const LoginSchema = z.object({
+  email: z.string().email().toLowerCase(),
+  password: z.string().min(1),
+});
 
 // ── Rate limiting (100 req/min per IP) ────────────────────────────────────────
 const rateLimitMap = new Map<string, { count: number; reset: number }>();
-
 function checkRateLimit(ip: string, limit = 100): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(ip);
@@ -55,25 +53,6 @@ function checkRateLimit(ip: string, limit = 100): boolean {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function generateId(): string {
-  return crypto.randomUUID();
-}
-
-function makeAccessToken(user: UserRecord): string {
-  return jwt.sign(
-    { sub: user.id, tenantId: user.tenantId, email: user.email, userType: user.userType },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRY, algorithm: "HS256" }
-  );
-}
-
-function makeRefreshToken(user: UserRecord): string {
-  const token = crypto.randomBytes(40).toString("hex");
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-  refreshTokens.set(token, { userId: user.id, tenantId: user.tenantId, token, expiresAt });
-  return token;
-}
-
 function stripPii(text: string): string {
   return text
     .replace(/\b\d{12}\b/g, "[REDACTED]")
@@ -81,83 +60,133 @@ function stripPii(text: string): string {
     .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, "[EMAIL]");
 }
 
-// ── Fastify setup ─────────────────────────────────────────────────────────────
-const fastify = Fastify({ logger: true });
-fastify.register(cors);
+function getIp(request: any): string {
+  return request.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ?? "unknown";
+}
 
-// Rate-limit hook for every request
+function makeAccessToken(user: { id: string; tenantId: string; email: string; userType: string | null }): string {
+  return jwt.sign(
+    { sub: user.id, tenantId: user.tenantId, email: user.email, userType: user.userType },
+    JWT_SECRET as string,
+    { expiresIn: JWT_EXPIRY, algorithm: "HS256" }
+  );
+}
+
+async function createRefreshToken(userId: string, tenantId: string, ip: string, userAgent: string): Promise<string> {
+  const token = crypto.randomBytes(40).toString("hex");
+  const expiresAt = new Date(Date.now() + REFRESH_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+
+  await db.insert(sessions).values({
+    userId,
+    tenantId,
+    refreshToken: token,
+    ipAddress: ip,
+    userAgent,
+    expiresAt,
+  });
+
+  return token;
+}
+
+// ── Fastify setup ─────────────────────────────────────────────────────────────
+const fastify = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" } });
+
+await fastify.register(cors, {
+  origin: process.env.ALLOWED_ORIGINS?.split(",") ?? true,
+  credentials: true,
+});
+await fastify.register(helmet, { contentSecurityPolicy: false });
+
+// Rate-limit hook
 fastify.addHook("preHandler", async (request, reply) => {
-  const ip = request.headers["x-forwarded-for"]?.toString().split(",")[0] ?? "unknown";
+  const ip = getIp(request);
   if (!checkRateLimit(ip)) {
     return reply.status(429).send({ error: "Rate limit exceeded. Try again in a minute." });
   }
 });
 
 // ── Health ────────────────────────────────────────────────────────────────────
-fastify.get("/health", async () => ({
-  status: "ok",
-  service: "identity-svc",
-  store: "in-memory",
-  users: users.size,
-  db_note: "Set DATABASE_URL to enable persistent PostgreSQL storage",
-}));
+fastify.get("/health", async () => {
+  // Quick DB ping
+  try {
+    await db.select().from(users).limit(1);
+    return { status: "ok", service: "identity-svc", db: "connected", store: "postgresql" };
+  } catch {
+    return { status: "degraded", service: "identity-svc", db: "disconnected" };
+  }
+});
 
 // ── POST /v1/auth/register ────────────────────────────────────────────────────
 fastify.post("/v1/auth/register", async (request, reply) => {
-  const { name, email, password, lang = "en", userType = "CITIZEN" } =
-    request.body as any;
+  const parse = RegisterSchema.safeParse(request.body);
+  if (!parse.success) {
+    return reply.status(400).send({ success: false, error: parse.error.errors[0]?.message ?? "Validation failed" });
+  }
 
-  if (!email || !password || !name) {
-    return reply.status(400).send({ success: false, error: "name, email and password are required" });
-  }
-  if (password.length < 8) {
-    return reply.status(400).send({ success: false, error: "Password must be at least 8 characters" });
-  }
-  if (users.has(email.toLowerCase())) {
+  const { name, email, password, userType, lang, bciNumber } = parse.data;
+
+  // Check if email already registered
+  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+  if (existing.length > 0) {
     return reply.status(409).send({ success: false, error: "Email already registered" });
   }
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
-  const id = generateId();
-  const tenantId = generateId(); // Each user gets their own tenant for now
 
-  const user: UserRecord = {
-    id, tenantId,
-    email: email.toLowerCase(),
-    passwordHash, name, userType, lang,
-    createdAt: new Date().toISOString(),
-  };
+  // Create tenant for this user (each user gets own tenant)
+  // MySQL has no RETURNING — insert then select back by unique key
+  const tenantName = `${name}'s Workspace`;
+  await db.insert(tenants).values({ name: tenantName });
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.name, tenantName)).limit(1);
 
-  users.set(email.toLowerCase(), user);
-  usersById.set(id, user);
+  // Create user
+  await db.insert(users).values({
+    tenantId: tenant.id,
+    email,
+    passwordHash,
+    fullName: name,
+    userType: userType as any,
+    preferredLang: lang,
+    bciNumber: bciNumber || null,
+    lastLoginAt: new Date(),
+  });
+  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
 
-  const accessToken = makeAccessToken(user);
-  const refreshToken = makeRefreshToken(user);
+  const accessToken = makeAccessToken({ id: user.id, tenantId: user.tenantId, email: user.email, userType: user.userType });
+  const ip = getIp(request);
+  const userAgent = request.headers["user-agent"] ?? "";
+  const refreshToken = await createRefreshToken(user.id, user.tenantId, ip, userAgent);
 
-  fastify.log.info({ event: "register", userId: id, userType });
+  fastify.log.info({ event: "register", userId: user.id, userType: stripPii(userType) });
 
   return reply.status(201).send({
     success: true,
     token: accessToken,
     refreshToken,
-    user: { id, name, email: user.email, userType, lang },
-    expiresIn: 900, // 15 minutes in seconds
+    user: { id: user.id, name, email: user.email, userType: user.userType, lang },
+    expiresIn: 900,
   });
 });
 
 // ── POST /v1/auth/login ───────────────────────────────────────────────────────
 fastify.post("/v1/auth/login", async (request, reply) => {
-  const { email, password } = request.body as any;
-
-  if (!email || !password) {
+  const parse = LoginSchema.safeParse(request.body);
+  if (!parse.success) {
     return reply.status(400).send({ success: false, error: "Email and password are required" });
   }
 
-  const user = users.get(email.toLowerCase());
-  if (!user) {
+  const { email, password } = parse.data;
+
+  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+  if (!user || !user.passwordHash) {
     // Constant-time response to prevent user enumeration
     await bcrypt.hash("dummy_constant_time", BCRYPT_COST);
     return reply.status(401).send({ success: false, error: "Invalid email or password" });
+  }
+
+  if (!user.isActive) {
+    return reply.status(403).send({ success: false, error: "Account is deactivated. Contact support." });
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
@@ -165,8 +194,13 @@ fastify.post("/v1/auth/login", async (request, reply) => {
     return reply.status(401).send({ success: false, error: "Invalid email or password" });
   }
 
-  const accessToken = makeAccessToken(user);
-  const refreshToken = makeRefreshToken(user);
+  // Update last login timestamp
+  await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+
+  const accessToken = makeAccessToken({ id: user.id, tenantId: user.tenantId, email: user.email, userType: user.userType });
+  const ip = getIp(request);
+  const userAgent = request.headers["user-agent"] ?? "";
+  const refreshToken = await createRefreshToken(user.id, user.tenantId, ip, userAgent);
 
   fastify.log.info({ event: "login", userId: user.id });
 
@@ -174,46 +208,46 @@ fastify.post("/v1/auth/login", async (request, reply) => {
     success: true,
     token: accessToken,
     refreshToken,
-    user: { id: user.id, name: user.name, email: user.email, userType: user.userType, lang: user.lang },
+    user: { id: user.id, name: user.fullName, email: user.email, userType: user.userType, lang: user.preferredLang, avatarUrl: user.avatarUrl },
     expiresIn: 900,
   });
 });
 
 // ── POST /v1/auth/refresh ─────────────────────────────────────────────────────
 fastify.post("/v1/auth/refresh", async (request, reply) => {
-  const { refreshToken } = request.body as any;
+  const { refreshToken } = (request.body as any) ?? {};
   if (!refreshToken) {
     return reply.status(400).send({ success: false, error: "refreshToken is required" });
   }
 
-  const record = refreshTokens.get(refreshToken);
-  if (!record || record.expiresAt < new Date()) {
-    refreshTokens.delete(refreshToken);
+  const [session] = await db.select().from(sessions).where(eq(sessions.refreshToken, refreshToken)).limit(1);
+
+  if (!session || session.expiresAt < new Date()) {
+    if (session) await db.delete(sessions).where(eq(sessions.id, session.id));
     return reply.status(401).send({ success: false, error: "Invalid or expired refresh token" });
   }
 
-  const user = usersById.get(record.userId);
-  if (!user) {
-    return reply.status(401).send({ success: false, error: "User not found" });
+  const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
+  if (!user || !user.isActive) {
+    return reply.status(401).send({ success: false, error: "User not found or deactivated" });
   }
 
-  // Rotate: delete old, issue new
-  refreshTokens.delete(refreshToken);
-  const newAccessToken = makeAccessToken(user);
-  const newRefreshToken = makeRefreshToken(user);
+  // Rotate: delete old session, issue new
+  await db.delete(sessions).where(eq(sessions.id, session.id));
+  const ip = getIp(request);
+  const userAgent = request.headers["user-agent"] ?? "";
+  const newRefreshToken = await createRefreshToken(user.id, user.tenantId, ip, userAgent);
+  const newAccessToken = makeAccessToken({ id: user.id, tenantId: user.tenantId, email: user.email, userType: user.userType });
 
-  return reply.send({
-    success: true,
-    token: newAccessToken,
-    refreshToken: newRefreshToken,
-    expiresIn: 900,
-  });
+  return reply.send({ success: true, token: newAccessToken, refreshToken: newRefreshToken, expiresIn: 900 });
 });
 
 // ── POST /v1/auth/logout ──────────────────────────────────────────────────────
 fastify.post("/v1/auth/logout", async (request, reply) => {
-  const { refreshToken } = request.body as any;
-  if (refreshToken) refreshTokens.delete(refreshToken);
+  const { refreshToken } = (request.body as any) ?? {};
+  if (refreshToken) {
+    await db.delete(sessions).where(eq(sessions.refreshToken, refreshToken)).catch(() => {});
+  }
   return reply.send({ success: true });
 });
 
@@ -224,30 +258,84 @@ fastify.post("/v1/auth/verify-token", async (request, reply) => {
   if (!token) return reply.status(401).send({ valid: false });
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as any;
+    const payload = jwt.verify(token, JWT_SECRET as string, { algorithms: ["HS256"] }) as any;
     return reply.send({ valid: true, userId: payload.sub, tenantId: payload.tenantId, userType: payload.userType });
   } catch {
     return reply.status(401).send({ valid: false, error: "Token invalid or expired" });
   }
 });
 
-// ── POST /v1/auth/send-otp (mock — SMS provider TBD) ─────────────────────────
-fastify.post("/v1/auth/send-otp", async (request, reply) => {
-  return reply.send({
-    success: true,
-    message: "OTP sent (SMS provider not yet configured — use email/password login)",
-    otp_token: "OTP_NOT_IMPLEMENTED",
-    expires_in: 300,
+// ── GET /v1/auth/me ───────────────────────────────────────────────────────────
+fastify.get("/v1/auth/me", async (request, reply) => {
+  const authHeader = request.headers["authorization"] as string;
+  const token = authHeader?.replace("Bearer ", "");
+  if (!token) return reply.status(401).send({ error: "Unauthorized" });
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET as string, { algorithms: ["HS256"] }) as any;
+    const [user] = await db.select({
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      userType: users.userType,
+      kycLevel: users.kycLevel,
+      bciVerified: users.bciVerified,
+      avatarUrl: users.avatarUrl,
+      preferredLang: users.preferredLang,
+      createdAt: users.createdAt,
+    }).from(users).where(eq(users.id, payload.sub)).limit(1);
+
+    if (!user) return reply.status(404).send({ error: "User not found" });
+    return reply.send({ user });
+  } catch {
+    return reply.status(401).send({ error: "Invalid token" });
+  }
+});
+
+// ── PATCH /v1/auth/profile ────────────────────────────────────────────────────
+fastify.patch("/v1/auth/profile", async (request, reply) => {
+  const authHeader = request.headers["authorization"] as string;
+  const token = authHeader?.replace("Bearer ", "");
+  if (!token) return reply.status(401).send({ error: "Unauthorized" });
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET as string, { algorithms: ["HS256"] }) as any;
+    const { fullName, preferredLang, avatarUrl } = (request.body as any) ?? {};
+
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (fullName?.trim()) updates.fullName = fullName.trim();
+    if (preferredLang) updates.preferredLang = preferredLang;
+    if (avatarUrl) updates.avatarUrl = avatarUrl;
+
+    await db.update(users).set(updates).where(eq(users.id, payload.sub));
+    return reply.send({ success: true });
+  } catch {
+    return reply.status(401).send({ error: "Invalid token" });
+  }
+});
+
+// ── POST /v1/auth/send-otp (STUB — SMS provider not yet integrated) ─────────────
+fastify.post("/v1/auth/send-otp", async (_request, reply) => {
+  // TODO: Integrate Exotel/Twilio/MSG91 for real OTP delivery.
+  // Returning 501 so clients know this is not yet live.
+  return reply.status(501).send({
+    success: false,
+    error: "OTP via SMS is not yet implemented. Please use email/password login.",
+    code: "OTP_NOT_IMPLEMENTED",
   });
 });
 
-// ── POST /v1/auth/bci-verify (Bar Council — stub, real API TBD) ───────────────
+// ── POST /v1/auth/bci-verify (STUB — Bar Council API partnership required) ────
 fastify.post("/v1/auth/bci-verify", async (request, reply) => {
-  const { bci_number } = request.body as any;
-  return reply.send({
-    success: true,
-    data: { verified: true, advocate_name: "BCI verification pending real API integration", cop_status: "VALID", bci_number },
-    note: "Real BCI verification requires Bar Council of India API partnership",
+  const { bci_number } = (request.body as any) ?? {};
+  // TODO: Integrate real Bar Council of India API when partnership is established.
+  // Do NOT return verified:true here — that would grant advocate-level access to unverified users.
+  return reply.status(501).send({
+    success: false,
+    verified: false,
+    bci_number,
+    error: "BCI verification is not yet live. Real API partnership with Bar Council of India is required.",
+    code: "BCI_VERIFICATION_NOT_IMPLEMENTED",
   });
 });
 
@@ -258,13 +346,12 @@ fastify.delete("/v1/auth/account", async (request, reply) => {
   if (!token) return reply.status(401).send({ error: "Unauthorized" });
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as any;
-    const user = usersById.get(payload.sub);
-    if (user) {
-      users.delete(user.email);
-      usersById.delete(user.id);
-    }
-    return reply.send({ success: true, message: "Account deleted" });
+    const payload = jwt.verify(token, JWT_SECRET as string) as any;
+    // Soft-delete: deactivate user
+    await db.update(users).set({ isActive: false, updatedAt: new Date() }).where(eq(users.id, payload.sub));
+    // Invalidate all sessions
+    await db.delete(sessions).where(eq(sessions.userId, payload.sub));
+    return reply.send({ success: true, message: "Account deactivated" });
   } catch {
     return reply.status(401).send({ error: "Invalid token" });
   }
@@ -275,9 +362,7 @@ const start = async () => {
   try {
     const port = process.env.PORT ? parseInt(process.env.PORT) : 4001;
     await fastify.listen({ port, host: "0.0.0.0" });
-    console.log(`✅ identity-svc running on port ${port} [REAL AUTH — bcrypt+JWT]`);
-    console.log(`   JWT_SECRET: ${JWT_SECRET === process.env.JWT_SECRET ? "from .env ✅" : "auto-generated (set JWT_SECRET in .env for persistence)"}`);
-    console.log(`   Store: in-memory (set DATABASE_URL for PostgreSQL persistence)`);
+    console.log(`✅ identity-svc running on port ${port} [PRODUCTION — PostgreSQL + bcrypt + JWT]`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

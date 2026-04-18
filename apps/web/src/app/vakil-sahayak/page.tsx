@@ -213,18 +213,29 @@ function AddHearingModal({ onClose, onAdded, clients, apiCall }: {
     if (!form.scheduledAt) { setError("Date is required."); return; }
     setSaving(true); setError("");
     try {
-      // workspace-svc needs matterId, but we have clientId from UI.
-      // For the MVP, we'll store a generic hearing linked by frontend state only
-      // when workspace-svc is available. Otherwise use local state.
-      const localHearing = {
-        id: Date.now().toString(),
+      const res = await apiCall("/api/workspace/hearings", {
+        method: "POST",
+        body: JSON.stringify({
+          matterId: "", // Optional in backend endpoint, will default to a UUID
+          scheduledAt: form.scheduledAt,
+          courtCode: form.court,
+          purpose: form.purpose
+        })
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to add hearing");
+      if (d._dev) throw new Error("workspace-svc is not running. Start it first.");
+      
+      const newHearing = {
+        id: d.hearingId,
         client_name: clients.find(c => c.id === form.clientId)?.fullName || "Unknown Client",
         purpose: form.purpose,
         hearing_date: form.scheduledAt,
         court: form.court,
         status: "UPCOMING",
       };
-      onAdded(localHearing);
+      
+      onAdded(newHearing);
       onClose();
     } catch (err: any) {
       setError(err.message);
@@ -413,10 +424,9 @@ export default function VakilSahayakPage() {
     if (!docHtml) return;
     setPdfLoading(true);
     try {
-      // Try real PDF via docgen-svc
-      const res = await fetch("/api/documents/pdf", {
+      // Try real PDF via docgen-svc. Using apiCall to inject JWT token.
+      const res = await apiCall("/api/documents/pdf", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           html: docHtml,
           filename: `${selectedDocType}_nyaymitra`,
@@ -453,6 +463,31 @@ export default function VakilSahayakPage() {
       URL.revokeObjectURL(url);
     } finally {
       setPdfLoading(false);
+    }
+  }
+
+  const [savingDoc, setSavingDoc] = useState(false);
+  async function handleSaveToCRM() {
+    if (!docHtml || !selectedDocType) return;
+    setSavingDoc(true); setDocError("");
+    try {
+      const title = `${selectedDocInfo?.title} - ${new Date().toLocaleDateString()}`;
+      const res = await apiCall("/api/workspace/documents", {
+        method: "POST",
+        body: JSON.stringify({
+          docType: selectedDocType,
+          title: title,
+          htmlContent: docHtml,
+          aiGenerated: docAiGenerated
+        })
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to save document to CRM");
+      alert("✅ Document saved to your CRM vault successfully!");
+    } catch (e: any) {
+      setDocError(e.message);
+    } finally {
+      setSavingDoc(false);
     }
   }
 
@@ -620,7 +655,7 @@ export default function VakilSahayakPage() {
                 <div className="relative">
                   <div className="space-y-3 pointer-events-none select-none">
                     {[{n:"Ramesh Sharma",c:"State v. Sharma — Bail Petition, Sessions Court"},{n:"Priya Nair",c:"Nair v. Builder — Consumer Forum Complaint"},{n:"Aakash Verma",c:"Verma v. XYZ Corp — Section 138 NI Act"}].map((cl,i) => (
-                      <div key={i} className="bg-card border border-border rounded-xl p-4 sm:p-5 flex items-center gap-4 blur-sm opacity-60">
+                      <div key={i} className="glass-card p-4 sm:p-5 flex items-center gap-4 blur-[2px] opacity-60">
                         <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-display text-xl font-bold shrink-0">{cl.n[0]}</div>
                         <div className="flex-1 space-y-1">
                           <div className="font-display text-lg font-semibold">{cl.n}</div>
@@ -681,15 +716,14 @@ export default function VakilSahayakPage() {
                     <Button onClick={() => setShowAddClient(true)} className="gap-2"><Plus className="h-4 w-4" />Add First Client</Button>
                   </CardContent></Card>
                 ) : (
-                  <div className="space-y-3">
-                    {clients.map(c => {
+                      <div className="stagger-3 space-y-3">
+                    {clients.map((c, index) => {
                       const displayName = c.fullName || c.name || "Unknown";
                       return (
-                        <Card key={c.id} className="hover:shadow-md transition-shadow">
-                          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                            <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-display text-xl font-bold shrink-0">
-                              {displayName.charAt(0).toUpperCase()}
-                            </div>
+                        <div key={c.id} className={`glass-card p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 hover:border-secondary/40 transition-all ${index < 5 ? `stagger-${index + 1}` : ''}`}>
+                          <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-display text-xl font-bold shrink-0">
+                            {displayName.charAt(0).toUpperCase()}
+                          </div>
                             <div className="flex-1 min-w-0 space-y-1">
                               <div className="font-display text-lg font-semibold truncate">{displayName}</div>
                               <div className="text-sm text-muted-foreground truncate">
@@ -706,8 +740,7 @@ export default function VakilSahayakPage() {
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
-                          </CardContent>
-                        </Card>
+                        </div>
                       );
                     })}
                   </div>
@@ -726,9 +759,9 @@ export default function VakilSahayakPage() {
                 </div>
                 <div className="relative">
                   {/* Preview grid — blurred */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pointer-events-none select-none blur-sm opacity-60">
-                    {DOCUMENT_TYPES.map(doc => (
-                      <div key={doc.id} className="bg-card border rounded-xl p-5 space-y-2">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pointer-events-none select-none blur-[2px] opacity-60">
+                    {DOCUMENT_TYPES.map((doc, i) => (
+                      <div key={doc.id} className={`glass-card p-5 space-y-2 stagger-${(i % 5) + 1}`}>
                         <div className="text-2xl">{doc.icon}</div>
                         <div className="font-display text-base font-semibold leading-tight">{doc.title}</div>
                         <div className="text-xs text-secondary font-semibold">{doc.subtitle}</div>
@@ -773,15 +806,13 @@ export default function VakilSahayakPage() {
                 </div>
                 {!selectedDocType ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {DOCUMENT_TYPES.map(doc => (
-                      <Card key={doc.id} className="cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all border hover:border-secondary/40"
+                    {DOCUMENT_TYPES.map((doc, i) => (
+                      <div key={doc.id} className={`glass-card cursor-pointer p-5 space-y-2 hover:-translate-y-1 hover:shadow-lg transition-all border border-border/50 hover:border-secondary/50 stagger-${(i % 5) + 1}`}
                         onClick={() => { setSelectedDocType(doc.id); setDocValues({}); setDocHtml(""); setDocError(""); }}>
-                        <CardContent className="p-5 space-y-2">
-                          <div className="text-2xl">{doc.icon}</div>
-                          <div className="font-display text-base font-semibold leading-tight">{doc.title}</div>
-                          <div className="text-xs text-secondary font-semibold">{doc.subtitle}</div>
-                        </CardContent>
-                      </Card>
+                        <div className="text-2xl">{doc.icon}</div>
+                        <div className="font-display text-base font-semibold leading-tight">{doc.title}</div>
+                        <div className="text-xs text-secondary font-semibold">{doc.subtitle}</div>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -823,6 +854,9 @@ export default function VakilSahayakPage() {
                           <span className="text-sm font-semibold text-secondary flex-1">
                             {docAiGenerated ? "🤖 AI-Generated — Advocate Review Draft" : "📄 Official Format — Advocate Review Draft"}
                           </span>
+                          <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 border-secondary/30 text-secondary hover:bg-secondary/10" onClick={handleSaveToCRM} disabled={savingDoc}>
+                            {savingDoc ? <><Loader2 className="h-3 w-3 animate-spin"/> Saving…</> : "💾 Save to CRM"}
+                          </Button>
                           <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handlePrintDraft}>🖨️ Print / PDF</Button>
                           <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={handleDownloadDraft} disabled={pdfLoading}>
                             {pdfLoading ? <><Loader2 className="h-3 w-3 animate-spin" />Generating…</> : "⬇️ Download PDF"}

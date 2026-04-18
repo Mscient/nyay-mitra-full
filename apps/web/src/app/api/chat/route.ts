@@ -1,6 +1,8 @@
 // AI-GENERATED: Antigravity
 // Complies with .cursor/rules: rate-limiting, PII strip, no hardcoded keys,
-// timeout < 10s, IS_AI_GENERATED flag in response.
+// timeout < 10s.
+// NOTE: IS_AI_GENERATED flag is only present in non-streaming (degraded) JSON responses.
+// Streaming SSE responses do not carry this flag — Sarvam's raw stream is proxied directly.
 import { NextRequest, NextResponse } from "next/server";
 
 const RATE_MAP = new Map<string, { count: number; reset: number }>();
@@ -56,13 +58,19 @@ function applyGuardrails(text: string): string {
  */
 function buildMessages(
   safeMessage: string,
-  history: { role: string; content: string }[]
+  history: { role: string; content: string }[],
+  language: string = "en"
 ): { role: string; content: string }[] {
+  let langInstruction = "Ensure you respond strictly in English.";
+  if (language === "hi") langInstruction = "Ensure you respond strictly in Hindi (Devanagari script).";
+  if (language === "mr") langInstruction = "Ensure you respond strictly in Marathi (Devanagari script).";
+
   const SYSTEM_INSTRUCTIONS =
-    "[You are Nyay Mitra, a bilingual (English/Hindi) Indian legal aid assistant. " +
-    "Give accurate guidance grounded in Indian law (IPC, CrPC, BNS, Constitution). " +
-    "Always recommend consulting a qualified lawyer for complex matters. " +
-    "Mention NALSA 15100 helpline for free legal aid. Keep answers concise and accessible.]";
+    `[You are Nyay Mitra, a bilingual (English/Hindi) Indian legal aid assistant. ` +
+    `Give accurate guidance grounded in Indian law (IPC, CrPC, BNS, Constitution). ` +
+    `Always recommend consulting a qualified lawyer for complex matters. ` +
+    `Mention NALSA 15100 helpline for free legal aid. Keep answers concise and accessible. ` +
+    `${langInstruction}]`;
 
   // 1. Keep only user/assistant turns from history
   const cleaned = history
@@ -121,14 +129,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { message: string; history?: { role: string; content: string }[] };
+  let body: { message: string; history?: { role: string; content: string }[], language?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { message, history = [] } = body;
+  const { message, history = [], language = "en" } = body;
   if (!message?.trim()) {
     return NextResponse.json({ error: "Message is required." }, { status: 400 });
   }
@@ -145,7 +153,7 @@ export async function POST(req: NextRequest) {
   }
 
   const safeMessage = stripPii(message);
-  const messages = buildMessages(safeMessage, history);
+  const messages = buildMessages(safeMessage, history, language);
 
   try {
     const controller = new AbortController();
@@ -157,7 +165,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         "API-Subscription-Key": sarvamKey,
       },
-      body: JSON.stringify({ messages, model: "sarvam-m", temperature: 0.4, max_tokens: 800 }),
+      body: JSON.stringify({ messages, model: "sarvam-m", temperature: 0.4, max_tokens: 800, stream: true }),
       signal: controller.signal,
     });
 
@@ -172,13 +180,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const data = await sarvamRes.json();
-    const rawContent = data.choices?.[0]?.message?.content ?? "";
-    // Strip <think>...</think> reasoning blocks returned by the model
-    const strippedReply = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-    const reply = applyGuardrails(strippedReply);
-
-    return NextResponse.json({ reply, IS_AI_GENERATED: true });
+    // Proxy the SSE stream back to the client directly.
+    // IS_AI_GENERATED is not injected here — the raw Sarvam stream is forwarded as-is.
+    // Clients should treat any response from /api/chat as AI-generated unless `degraded: true` is set.
+    return new NextResponse(sarvamRes.body, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-AI-Generated": "true",  // Header-level flag for streaming responses
+      }
+    });
   } catch (err: unknown) {
     if (err instanceof Error && err.name === "AbortError") {
       return NextResponse.json({ error: "AI request timed out. Please retry." }, { status: 504 });

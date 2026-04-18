@@ -36,7 +36,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Voice state
+  // Voice & Language state
+  const [language, setLanguage] = useState<"en" | "hi" | "mr">("en");
   const [isListening, setIsListening] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [voiceSupported, setVoiceSupported] = useState(false);
@@ -66,11 +67,18 @@ export default function ChatPage() {
       .replace(/https?:\/\/\S+/g, "")  // strip URLs
       .substring(0, 500);              // limit length
     const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.lang = "en-IN";
+    
+    utterance.lang = language === "en" ? "en-IN" : language === "hi" ? "hi-IN" : "mr-IN";
     utterance.rate = 0.95;
     utterance.pitch = 1.0;
+    
+    // Attempt to pick a native voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const targetVoice = voices.find(v => v.lang.startsWith(language));
+    if (targetVoice) utterance.voice = targetVoice;
+
     window.speechSynthesis.speak(utterance);
-  }, [ttsEnabled]);
+  }, [ttsEnabled, language]);
 
   // Stop TTS
   const stopSpeech = () => {
@@ -86,7 +94,7 @@ export default function ChatPage() {
 
     const recognition = new SpeechRec();
     recognitionRef.current = recognition;
-    recognition.lang = "en-IN";
+    recognition.lang = language === "en" ? "en-IN" : language === "hi" ? "hi-IN" : "mr-IN";
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognition.continuous = false;
@@ -138,26 +146,76 @@ export default function ChatPage() {
     else startListening();
   };
 
-  async function sendMessage(text: string = input) {
+    async function sendMessage(text: string = input) {
     if (!text.trim() || loading) return;
     stopListening();
+    
     const userMsg: Message = { role: "user", content: text };
-    setMessages(prev => [...prev, userMsg]);
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setInput("");
     setLoading(true);
+    
+    // Add a placeholder assistant message that we will stream into
+    setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+    
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history: messages }),
+        body: JSON.stringify({ message: text, history: newMessages.slice(0, -1), language }),
       });
-      const data = await res.json();
-      const reply = data.reply || data.message || "I'm sorry, I couldn't process that request. Please try again.";
-      setMessages(prev => [...prev, { role: "assistant", content: reply }]);
-      speak(reply);
+      
+      if (!res.ok) throw new Error("Failed to connect");
+      if (!res.body) throw new Error("No readable stream");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      let aiText = "";
+      let inThinkBlock = false;
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+        
+        for (const line of lines) {
+          if (line.startsWith("data: ") && line !== "data: [DONE]") {
+            try {
+              const data = JSON.parse(line.slice(6));
+              const token = data.choices?.[0]?.delta?.content || "";
+              
+              if (token) {
+                // Strip <think> blocks on the fly
+                if (token.includes("<think>")) inThinkBlock = true;
+                
+                if (!inThinkBlock) {
+                  aiText += token;
+                  // Update the last message
+                  setMessages(prev => [
+                    ...prev.slice(0, -1),
+                    { role: "assistant", content: aiText }
+                  ]);
+                }
+                
+                if (token.includes("</think>")) inThinkBlock = false;
+              }
+            } catch (e) {
+              // Ignore parse errors from partial chunks
+            }
+          }
+        }
+      }
+      speak(aiText);
     } catch {
       const errMsg = "⚠️ Unable to connect to the AI service right now. Please ensure the backend server is running or try again shortly.";
-      setMessages(prev => [...prev, { role: "assistant", content: errMsg }]);
+      setMessages(prev => [
+        ...prev.slice(0, -1),
+        { role: "assistant", content: errMsg }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -212,8 +270,20 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* TTS toggle */}
+        {/* Language & TTS toggle */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <select 
+            value={language} 
+            onChange={e => setLanguage(e.target.value as "en" | "hi" | "mr")}
+            style={{
+              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "5px 10px", 
+              color: "var(--gold)", fontSize: 13, fontWeight: 600, outline: "none", cursor: "pointer", appearance: "none"
+            }}
+          >
+            <option value="en" style={{ color: "var(--ink)" }}>English</option>
+            <option value="hi" style={{ color: "var(--ink)" }}>हिन्दी</option>
+            <option value="mr" style={{ color: "var(--ink)" }}>मराठी</option>
+          </select>
           {voiceSupported && (
             <button
               onClick={() => { setTtsEnabled(p => !p); if (ttsEnabled) stopSpeech(); }}
@@ -254,7 +324,7 @@ export default function ChatPage() {
             </div>
           </div>
         ))}
-        {loading && (
+        {loading && messages[messages.length - 1]?.content === "" && (
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
             <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--forest)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <Bot size={16} color="var(--gold)" />
@@ -283,6 +353,20 @@ export default function ChatPage() {
                 {q}
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Contextual Actionable Chips ─────────────────────────────── */}
+      {messages.length > 1 && !loading && (
+        <div style={{ padding: "0 clamp(16px,4vw,48px) 12px", maxWidth: 860, width: "100%", margin: "0 auto" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button className="quick-btn" onClick={() => sendMessage(language === "hi" ? "कृपया इसे आसान शब्दों में समझाएं।" : "Can you explain this in simpler terms?")} style={{ padding: "6px 12px", background: "rgba(26,46,26,0.05)", border: "1px solid rgba(26,46,26,0.15)", borderRadius: 16, fontSize: 11, fontWeight: 600, color: "var(--ink-mid)", cursor: "pointer", fontFamily: "'Instrument Sans', sans-serif" }}>
+                {language === "hi" ? "आसान शब्दों में" : "Explain simply"}
+              </button>
+              <button className="quick-btn" onClick={() => sendMessage(language === "hi" ? "कृपया मुझे इसके लिए प्रासंगिक कानूनी धाराएं बताएं।" : "What are the exact legal sections for this?")} style={{ padding: "6px 12px", background: "rgba(26,46,26,0.05)", border: "1px solid rgba(26,46,26,0.15)", borderRadius: 16, fontSize: 11, fontWeight: 600, color: "var(--ink-mid)", cursor: "pointer", fontFamily: "'Instrument Sans', sans-serif" }}>
+                {language === "hi" ? "कानूनी धाराएं क्या हैं?" : "Cite legal sections"}
+              </button>
           </div>
         </div>
       )}

@@ -1,29 +1,78 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const fastify_1 = __importDefault(require("fastify"));
-const cors_1 = __importDefault(require("@fastify/cors"));
-const puppeteer_1 = __importDefault(require("puppeteer"));
-const zod_1 = require("zod");
-const fastify = (0, fastify_1.default)({ logger: true });
-fastify.register(cors_1.default);
-// ── Health check ──────────────────────────────────────────────────────────────
-fastify.get("/health", async () => ({ status: "ok", service: "docgen-svc" }));
-// ── PDF Generation endpoint ───────────────────────────────────────────────────
-const GenerateSchema = zod_1.z.object({
-    html: zod_1.z.string().min(100, "HTML content too short"),
-    filename: zod_1.z.string().optional().default("nyaymitra_document"),
-    format: zod_1.z.enum(["A4", "Letter"]).optional().default("A4"),
-    landscape: zod_1.z.boolean().optional().default(false),
+// docgen-svc — Production PDF Generation Service
+// Puppeteer · JWT Auth · Rate Limiting · Helmet · Zod Validation
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import puppeteer from "puppeteer";
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
+import { z } from "zod";
+dotenv.config();
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET)
+    throw new Error("JWT_SECRET must be set in environment variables");
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 4003;
+// ── Rate limiting (20 PDF requests/min per IP — PDFs are expensive) ────────────
+const rateLimitMap = new Map();
+function checkRateLimit(ip, limit = 20) {
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip);
+    if (!entry || entry.reset < now) {
+        rateLimitMap.set(ip, { count: 1, reset: now + 60_000 });
+        return true;
+    }
+    if (entry.count >= limit)
+        return false;
+    entry.count++;
+    return true;
+}
+// ── JWT verification ───────────────────────────────────────────────────────────
+function verifyToken(authHeader) {
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token)
+        return { valid: false };
+    try {
+        const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+        return { valid: true, userId: payload.sub };
+    }
+    catch {
+        return { valid: false };
+    }
+}
+// ── Fastify setup ──────────────────────────────────────────────────────────────
+const fastify = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" } });
+await fastify.register(cors, { origin: true, credentials: true });
+await fastify.register(helmet, { contentSecurityPolicy: false });
+// Rate limit hook
+fastify.addHook("preHandler", async (request, reply) => {
+    const ip = request.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ?? "unknown";
+    if (!checkRateLimit(ip)) {
+        return reply.status(429).send({ error: "Rate limit exceeded. Max 20 documents per minute." });
+    }
+});
+// ── Health ─────────────────────────────────────────────────────────────────────
+fastify.get("/health", async () => ({
+    status: "ok",
+    service: "docgen-svc",
+    puppeteer: "ready",
+}));
+// ── PDF Generation ─────────────────────────────────────────────────────────────
+const GenerateSchema = z.object({
+    html: z.string().min(100, "HTML content too short"),
+    filename: z.string().optional().default("nyaymitra_document"),
+    format: z.enum(["A4", "Letter"]).optional().default("A4"),
+    landscape: z.boolean().optional().default(false),
 });
 fastify.post("/v1/docgen/pdf", async (request, reply) => {
+    // JWT required
+    const auth = verifyToken(request.headers["authorization"]);
+    if (!auth.valid) {
+        return reply.status(401).send({ error: "Unauthorized: valid JWT required to generate documents" });
+    }
     let browser;
     try {
         const body = GenerateSchema.parse(request.body);
-        // Launch Puppeteer (headless)
-        browser = await puppeteer_1.default.launch({
+        browser = await puppeteer.launch({
             headless: true,
             args: [
                 "--no-sandbox",
@@ -34,9 +83,9 @@ fastify.post("/v1/docgen/pdf", async (request, reply) => {
             ],
         });
         const page = await browser.newPage();
-        // Inject the HTML content directly
+        // CSP-safe: set content directly, no remote script injection risk
         await page.setContent(body.html, { waitUntil: "networkidle0" });
-        // Inject Google Fonts if not already present (for Cormorant Garamond)
+        // Inject Google Fonts for premium typography
         await page.evaluate(() => {
             if (!document.querySelector('link[href*="fonts.googleapis"]')) {
                 const link = document.createElement("link");
@@ -45,57 +94,55 @@ fastify.post("/v1/docgen/pdf", async (request, reply) => {
                 document.head.appendChild(link);
             }
         });
-        // Wait a moment for fonts
-        await new Promise(r => setTimeout(r, 800));
-        // Generate PDF
+        // Wait for fonts to render
+        await new Promise(r => setTimeout(r, 1000));
         const pdfBuffer = await page.pdf({
             format: body.format,
             landscape: body.landscape,
             printBackground: true,
-            margin: {
-                top: "20mm",
-                right: "15mm",
-                bottom: "20mm",
-                left: "15mm",
-            },
+            margin: { top: "20mm", right: "15mm", bottom: "20mm", left: "15mm" },
             displayHeaderFooter: true,
-            headerTemplate: `<div style="font-size:8px;color:#999;width:100%;text-align:center;font-family:sans-serif;">DRAFT — For Review Only — Nyay Mitra</div>`,
-            footerTemplate: `<div style="font-size:8px;color:#999;width:100%;text-align:center;font-family:sans-serif;">Page <span class="pageNumber"></span> of <span class="totalPages"></span> · Generated by Nyay Mitra · Not a substitute for professional legal advice</div>`,
+            headerTemplate: `<div style="font-size:8px;color:#999;width:100%;text-align:center;font-family:'Instrument Sans',sans-serif;padding:4px 0;">DRAFT — For Review Only — Nyay Mitra</div>`,
+            footerTemplate: `<div style="font-size:8px;color:#999;width:100%;text-align:center;font-family:'Instrument Sans',sans-serif;padding:4px 0;">Page <span class="pageNumber"></span> of <span class="totalPages"></span> · Generated by Nyay Mitra · Not a substitute for professional legal advice</div>`,
         });
         await browser.close();
-        // Return PDF as binary
+        fastify.log.info({ event: "pdf_generated", userId: auth.userId, filename: body.filename });
         reply
             .header("Content-Type", "application/pdf")
             .header("Content-Disposition", `attachment; filename="${body.filename}.pdf"`)
             .header("Content-Length", pdfBuffer.length)
+            .header("X-Generated-By", "nyay-mitra-docgen-svc")
             .send(pdfBuffer);
     }
     catch (err) {
         if (browser)
             await browser.close().catch(() => { });
-        if (err instanceof zod_1.z.ZodError) {
+        if (err instanceof z.ZodError) {
             return reply.status(400).send({ error: "Validation failed", details: err.errors });
         }
         fastify.log.error(err);
-        return reply.status(500).send({ error: "PDF generation failed. Ensure Puppeteer is installed." });
+        return reply.status(500).send({ error: "PDF generation failed. Check server logs." });
     }
 });
-// ── HTML → PDF preview (returns base64 for browser preview) ──────────────────
+// ── Preview (PNG base64 — no auth required, cheaper than PDF) ─────────────────
 fastify.post("/v1/docgen/preview", async (request, reply) => {
     let browser;
     try {
-        const { html } = zod_1.z.object({ html: zod_1.z.string().min(100) }).parse(request.body);
-        browser = await puppeteer_1.default.launch({
+        const { html } = z.object({ html: z.string().min(100) }).parse(request.body);
+        browser = await puppeteer.launch({
             headless: true,
-            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
         });
         const page = await browser.newPage();
+        await page.setViewport({ width: 794, height: 1123 }); // A4 at 96dpi
         await page.setContent(html, { waitUntil: "networkidle0" });
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 600));
         const screenshot = await page.screenshot({ type: "png", fullPage: false });
         await browser.close();
         return reply.send({
             preview: `data:image/png;base64,${Buffer.from(screenshot).toString("base64")}`,
+            width: 794,
+            height: 1123,
         });
     }
     catch (err) {
@@ -105,12 +152,23 @@ fastify.post("/v1/docgen/preview", async (request, reply) => {
         return reply.status(500).send({ error: "Preview generation failed." });
     }
 });
-// ── Start ─────────────────────────────────────────────────────────────────────
+// ── Word/DOCX export (HTML to DOCX via Mammoth-compatible HTML) ───────────────
+fastify.post("/v1/docgen/docx", async (request, reply) => {
+    const auth = verifyToken(request.headers["authorization"]);
+    if (!auth.valid)
+        return reply.status(401).send({ error: "Unauthorized" });
+    // Minimal valid DOCX structure (for direct download)
+    // Full DOCX generation requires docx package — stub for now
+    return reply.status(501).send({
+        error: "DOCX export coming soon",
+        alternative: "Use /v1/docgen/pdf for now",
+    });
+});
+// ── Start ──────────────────────────────────────────────────────────────────────
 const start = async () => {
     try {
-        const port = process.env.PORT ? parseInt(process.env.PORT) : 4003;
-        await fastify.listen({ port, host: "0.0.0.0" });
-        console.log(`docgen-svc running on port ${port}`);
+        await fastify.listen({ port: PORT, host: "0.0.0.0" });
+        console.log(`✅ docgen-svc running on port ${PORT} [PRODUCTION — JWT secured · Rate limited]`);
     }
     catch (err) {
         fastify.log.error(err);

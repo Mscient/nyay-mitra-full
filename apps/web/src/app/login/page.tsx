@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
+import { setAuth, scheduleTokenRefresh } from "@/lib/auth";
 
 declare global { interface Window { google?: any; } }
 const GOOGLE_CLIENT_ID = "450969618266-iom7rkqvkfh1teb4p3tlupsq1hlgh041.apps.googleusercontent.com";
@@ -11,7 +12,7 @@ const GOOGLE_CLIENT_ID = "450969618266-iom7rkqvkfh1teb4p3tlupsq1hlgh041.apps.goo
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams?.get("returnTo") || "/chat";
+  const returnTo = searchParams?.get("returnTo") || "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,12 +49,11 @@ function LoginForm() {
     return () => { if (document.head.contains(script)) document.head.removeChild(script); };
   }, []);
 
-  async function handleGoogleResponse(response: any) {
+  async function handleGoogleResponse(_response: any) {
     setIsLoading(true); setGlobalError("");
     try {
-      // Stub: in real app, send response.credential to identity-svc
-      localStorage.setItem("nyay_token", "stub_google_jwt");
-      router.push(returnTo);
+      // Google OAuth stub — real implementation requires backend Google token exchange
+      setGlobalError("Google login coming soon. Please use email/password for now.");
     } catch {
       setGlobalError("Google login failed.");
     } finally {
@@ -84,16 +84,27 @@ function LoginForm() {
 
     setIsLoading(true); setGlobalError("");
     try {
-      // Call local auth proxy which acts as a bridge to identity-svc
       const res = await fetch("/api/auth/login", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Login failed");
-      
-      localStorage.setItem("nyay_token", data.token);
-      router.push(returnTo);
+
+      // Persist auth state with full user object + refresh token
+      setAuth(data.token, data.refreshToken, {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        userType: data.user.userType,
+        lang: data.user.lang ?? "en",
+        avatarUrl: data.user.avatarUrl,
+      });
+      scheduleTokenRefresh();
+
+      // Redirect advocates to dashboard, citizens to their original destination
+      const destination = data.user.userType === "ADVOCATE" ? "/dashboard" : (returnTo === "/dashboard" ? "/chat" : returnTo);
+      router.push(destination);
       router.refresh();
     } catch (err: any) {
       setGlobalError(err.message || "Invalid credentials. Please try again.");
@@ -104,27 +115,27 @@ function LoginForm() {
 
   const inputStyle = {
     width: "100%", padding: "12px 16px", border: "1.5px solid var(--border-color)", borderRadius: 10,
-    fontFamily: "'Instrument Sans',sans-serif", fontSize: 16, color: "var(--ink)", background: "var(--cream)", outline: "none", boxSizing: "border-box" as const, transition: "border-color 0.2s"
+    transition: "all 0.25s ease"
   };
-  const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink-mid)", marginBottom: 6 };
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink-mid)", marginBottom: 8 };
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--cream)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Instrument Sans', sans-serif" }}>
-      <nav style={{ position: "absolute", top: 24, left: 32 }}>
+    <div className="dashboard-bg flex-center" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, paddingBottom: 64 }}>
+      <nav className="stagger-1" style={{ position: "absolute", top: 24, left: 32 }}>
         <Link href="/" style={{ textDecoration: "none", fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--gold)" }}>← Back Home</Link>
       </nav>
 
-      <div style={{ marginBottom: 32, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div className="stagger-2" style={{ marginBottom: 32, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
           <div style={{ width: 36, height: 36, background: "var(--forest)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 16, height: 16, border: "2px solid var(--gold)", borderRadius: "50%" }} />
           </div>
-          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 600, color: "var(--ink)" }}>Nyay Mitra</h1>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 36, fontWeight: 700, color: "var(--ink)", letterSpacing: -0.5 }}>Nyay Mitra</h1>
         </div>
-        <p style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 600 }}>Your AI Legal Aid Assistant</p>
+        <p style={{ fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 700 }}>AI Legal Intelligence</p>
       </div>
 
-      <div style={{ background: "var(--ivory)", width: "100%", maxWidth: 420, borderRadius: 24, border: "1px solid var(--border-color)", padding: "40px 32px", boxShadow: "0 10px 40px rgba(0,0,0,0.03)" }}>
+      <div className="glass-card stagger-3" style={{ width: "100%", maxWidth: 440, padding: "48px 40px" }}>
         <div style={{ marginBottom: 32 }}>
           <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: "var(--ink)", marginBottom: 8 }}>Welcome Back</h2>
           <p style={{ fontSize: 14, color: "var(--ink-muted)", lineHeight: 1.5 }}>
@@ -167,16 +178,16 @@ function LoginForm() {
         )}
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div>
+          <div className="stagger-4">
             <label style={labelStyle}>Email Address</label>
-            <input type="email" value={email} onChange={e => { setEmail(e.target.value); if (touched.email) validateField("email", e.target.value); }} onBlur={() => handleBlur("email", email)} placeholder="you@example.com" style={{ ...inputStyle, borderColor: errors.email && touched.email ? "#a63a1e" : "var(--border-color)" }} onFocus={e => !errors.email && (e.target.style.borderColor = "var(--gold)")} />
+            <input type="email" className="premium-input" value={email} onChange={e => { setEmail(e.target.value); if (touched.email) validateField("email", e.target.value); }} onBlur={() => handleBlur("email", email)} placeholder="you@example.com" style={{ ...inputStyle, borderColor: errors.email && touched.email ? "#a63a1e" : "rgba(26, 46, 26, 0.15)" }} />
             {errors.email && touched.email && <div style={{ fontSize: 12, color: "#a63a1e", marginTop: 6, fontWeight: 500 }}>{errors.email}</div>}
           </div>
 
-          <div>
+          <div className="stagger-4">
             <label style={labelStyle}>Password</label>
             <div style={{ position: "relative" }}>
-              <input type={showPassword ? "text" : "password"} value={password} onChange={e => { setPassword(e.target.value); if (touched.password) validateField("password", e.target.value); }} onBlur={() => handleBlur("password", password)} placeholder="••••••••" style={{ ...inputStyle, borderColor: errors.password && touched.password ? "#a63a1e" : "var(--border-color)", paddingRight: 40 }} onFocus={e => !errors.password && (e.target.style.borderColor = "var(--gold)")} />
+              <input type={showPassword ? "text" : "password"} className="premium-input" value={password} onChange={e => { setPassword(e.target.value); if (touched.password) validateField("password", e.target.value); }} onBlur={() => handleBlur("password", password)} placeholder="••••••••" style={{ ...inputStyle, borderColor: errors.password && touched.password ? "#a63a1e" : "rgba(26, 46, 26, 0.15)", paddingRight: 40 }} />
               <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--ink-muted)" }}>
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -184,12 +195,12 @@ function LoginForm() {
             {errors.password && touched.password && <div style={{ fontSize: 12, color: "#a63a1e", marginTop: 6, fontWeight: 500 }}>{errors.password}</div>}
           </div>
 
-          <button type="submit" disabled={isLoading} style={{ marginTop: 8, width: "100%", padding: "14px", background: isLoading ? "var(--ink-muted)" : "var(--forest)", color: "var(--gold-pale)", border: "none", borderRadius: 10, fontFamily: "'Instrument Sans',sans-serif", fontSize: 15, fontWeight: 600, cursor: isLoading ? "not-allowed" : "pointer", transition: "background 0.2s" }}>
+          <button type="submit" disabled={isLoading} className="stagger-5" style={{ marginTop: 8, width: "100%", padding: "14px", background: isLoading ? "var(--ink-muted)" : "var(--forest)", color: "var(--gold-pale)", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: isLoading ? "not-allowed" : "pointer", transition: "background 0.2s, transform 0.1s" }} onActive={e => (e.currentTarget.style.transform = "scale(0.98)")}>
             {isLoading ? "Signing in…" : "Login"}
           </button>
         </form>
 
-        <div style={{ marginTop: 32, textAlign: "center", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="stagger-5" style={{ marginTop: 32, textAlign: "center", display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ fontSize: 14, color: "var(--ink-muted)" }}>
             Don't have an account?{" "}
             <Link href={`/register${returnTo !== "/chat" ? `?returnTo=${returnTo}` : ""}`} style={{ color: "var(--forest)", fontWeight: 700, textDecoration: "none" }}>Register</Link>

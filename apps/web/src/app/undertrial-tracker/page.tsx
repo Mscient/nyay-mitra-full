@@ -186,6 +186,26 @@ export default function UndertrialTrackerPage() {
                     </div>
                   </div>
                   <div style={{ padding: 24 }}>
+                    {/* Visual Threat Gauge / Progress Bar */}
+                    {result.halfMaxDays !== Infinity && (
+                      <div style={{ marginBottom: 24 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, color: "var(--ink-muted)", marginBottom: 8 }}>
+                          <span>Arrest Date</span>
+                          <span>Eligibility ({result.halfMaxDays} Days)</span>
+                        </div>
+                        <div style={{ width: "100%", height: 12, background: "var(--cream-dark)", borderRadius: 6, overflow: "hidden" }}>
+                          <div style={{ 
+                            height: "100%", 
+                            width: `${Math.min(100, (result.daysServed / result.halfMaxDays) * 100)}%`, 
+                            background: result.isEligible ? "#10b981" : "var(--gold)",
+                            transition: "width 1s ease-in-out"
+                          }} />
+                        </div>
+                        <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, marginTop: 6, color: result.isEligible ? "#10b981" : "var(--gold)" }}>
+                          {Math.min(100, Math.round((result.daysServed / result.halfMaxDays) * 100))}% of Section 436A threshold served
+                        </div>
+                      </div>
+                    )}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
                       {[["Accused", result.name], ["Offence", `Sec ${result.section} — ${result.offence}`], ["Max Sentence", result.maxYears === 99 ? "Life / Death" : result.maxYears + " years"], ["Half of Max", result.halfMaxDays === Infinity ? "N/A" : `${result.halfMaxDays} days (${(result.halfMaxDays/365).toFixed(1)} yrs)`], ["Days Served", `${result.daysServed} days (${(result.daysServed/365).toFixed(1)} yrs)`], ["Days Remaining", result.isEligible ? "—" : `${result.daysRemaining} more days`]].map(([k, v]) => (
                         <div key={k} style={{ background: "var(--cream)", borderRadius: 10, padding: "10px 14px" }}>

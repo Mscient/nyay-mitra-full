@@ -10,7 +10,15 @@
     },
     "dev": {
       "cache": false,
+      "persistent": true,
+      "dependsOn": []
+    },
+    "start": {
+      "cache": false,
       "persistent": true
+    },
+    "push": {
+      "cache": false
     }
   }
 }

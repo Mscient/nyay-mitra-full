@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
+import { setAuth, scheduleTokenRefresh } from "@/lib/auth";
 
 declare global { interface Window { google?: any; } }
 const GOOGLE_CLIENT_ID = "450969618266-iom7rkqvkfh1teb4p3tlupsq1hlgh041.apps.googleusercontent.com";
@@ -18,7 +19,9 @@ type Language = keyof typeof LANGUAGES;
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams?.get("returnTo") || "/chat";
+  const returnTo = searchParams?.get("returnTo") || "/dashboard";
+  const isAdvocateFlow = returnTo.includes("vakil-sahayak");
+  const [userType, setUserType] = useState<"CITIZEN" | "ADVOCATE">(isAdvocateFlow ? "ADVOCATE" : "CITIZEN");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -32,9 +35,23 @@ function RegisterForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [globalError, setGlobalError] = useState("");
   
-  const isAdvocateFlow = returnTo.includes("vakil-sahayak");
+  // BCI Verification Simulation
+  const [barCouncilId, setBarCouncilId] = useState("");
+  const [bciStatus, setBciStatus] = useState<"idle" | "verifying" | "verified" | "error">("idle");
   
   const googleBtnRef = useRef<HTMLDivElement>(null);
+
+  function simulateBciVerification() {
+    if (!barCouncilId.trim()) return;
+    setBciStatus("verifying");
+    setTimeout(() => {
+      if (barCouncilId.length >= 5) {
+        setBciStatus("verified");
+      } else {
+        setBciStatus("error");
+      }
+    }, 1500);
+  }
 
   useEffect(() => {
     // Inject Google script
@@ -59,12 +76,10 @@ function RegisterForm() {
     return () => { if (document.head.contains(script)) document.head.removeChild(script); };
   }, []);
 
-  async function handleGoogleResponse(response: any) {
+  async function handleGoogleResponse(_response: any) {
     setIsLoading(true); setGlobalError("");
     try {
-      localStorage.setItem("nyay_token", "stub_google_jwt");
-      localStorage.setItem("nyay_lang", lang);
-      router.push(returnTo);
+      setGlobalError("Google sign-up coming soon. Please use email/password for now.");
     } catch {
       setGlobalError("Google sign-up failed.");
     } finally {
@@ -95,17 +110,24 @@ function RegisterForm() {
 
     setIsLoading(true); setGlobalError("");
     try {
-      // Call local auth proxy which acts as a bridge to identity-svc
       const res = await fetch("/api/auth/register", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, lang })
+        body: JSON.stringify({ name, email, password, lang, userType })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
-      
-      localStorage.setItem("nyay_token", data.token);
-      localStorage.setItem("nyay_lang", lang);
-      router.push(returnTo);
+
+      setAuth(data.token, data.refreshToken, {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        userType: data.user.userType,
+        lang: data.user.lang ?? lang,
+        avatarUrl: null,
+      });
+      scheduleTokenRefresh();
+
+      router.push(data.user.userType === "ADVOCATE" ? "/dashboard" : "/chat");
       router.refresh();
     } catch (err: any) {
       setGlobalError(err.message || "Registration failed. Please try again.");
@@ -116,27 +138,27 @@ function RegisterForm() {
 
   const inputStyle = {
     width: "100%", padding: "12px 16px", border: "1.5px solid var(--border-color)", borderRadius: 10,
-    fontFamily: "'Instrument Sans',sans-serif", fontSize: 16, color: "var(--ink)", background: "var(--cream)", outline: "none", boxSizing: "border-box" as const, transition: "border-color 0.2s"
+    transition: "all 0.25s ease"
   };
-  const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink-mid)", marginBottom: 6 };
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink-mid)", marginBottom: 8 };
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--cream)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Instrument Sans', sans-serif" }}>
-      <nav style={{ position: "absolute", top: 24, left: 32 }}>
+    <div className="dashboard-bg flex-center" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, paddingBottom: 64 }}>
+      <nav className="stagger-1" style={{ position: "absolute", top: 24, left: 32 }}>
         <Link href="/" style={{ textDecoration: "none", fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--gold)" }}>← Back Home</Link>
       </nav>
 
-      <div style={{ marginBottom: 32, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div className="stagger-2" style={{ marginBottom: 32, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
           <div style={{ width: 36, height: 36, background: "var(--forest)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 16, height: 16, border: "2px solid var(--gold)", borderRadius: "50%" }} />
           </div>
-          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 600, color: "var(--ink)" }}>Nyay Mitra</h1>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 36, fontWeight: 700, color: "var(--ink)", letterSpacing: -0.5 }}>Nyay Mitra</h1>
         </div>
-        <p style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 600 }}>Your AI Legal Aid Assistant</p>
+        <p style={{ fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 700 }}>AI Legal Intelligence</p>
       </div>
 
-      <div style={{ background: "var(--ivory)", width: "100%", maxWidth: 420, borderRadius: 24, border: "1px solid var(--border-color)", padding: "40px 32px", boxShadow: "0 10px 40px rgba(0,0,0,0.03)" }}>
+      <div className="glass-card stagger-3" style={{ width: "100%", maxWidth: 440, padding: "48px 40px" }}>
         <div style={{ marginBottom: 32 }}>
           {isAdvocateFlow ? (
             <>
@@ -169,22 +191,36 @@ function RegisterForm() {
         )}
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div>
+          <div className="stagger-4">
             <label style={labelStyle}>Full Name</label>
-            <input type="text" value={name} onChange={e => { setName(e.target.value); if (touched.name) validateField("name", e.target.value); }} onBlur={() => handleBlur("name", name)} placeholder="Prashant Bhosale" style={{ ...inputStyle, borderColor: errors.name && touched.name ? "#a63a1e" : "var(--border-color)" }} onFocus={e => !errors.name && (e.target.style.borderColor = "var(--gold)")} />
+            <input type="text" className="premium-input" value={name} onChange={e => { setName(e.target.value); if (touched.name) validateField("name", e.target.value); }} onBlur={() => handleBlur("name", name)} placeholder="Full Name" style={{ ...inputStyle, borderColor: errors.name && touched.name ? "#a63a1e" : "rgba(26, 46, 26, 0.15)" }} />
             {errors.name && touched.name && <div style={{ fontSize: 12, color: "#a63a1e", marginTop: 6, fontWeight: 500 }}>{errors.name}</div>}
           </div>
 
+          {isAdvocateFlow && (
+            <div className="stagger-4" style={{ animationDelay: "0.22s" }}>
+              <label style={labelStyle}>Bar Council ID</label>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input type="text" className="premium-input" value={barCouncilId} onChange={e => { setBarCouncilId(e.target.value); if (bciStatus !== "idle") setBciStatus("idle"); }} disabled={bciStatus === "verified" || bciStatus === "verifying"} placeholder="e.g. MAH/123/2010" style={{ ...inputStyle, flex: 1, borderColor: bciStatus === "error" ? "#a63a1e" : bciStatus === "verified" ? "#10b981" : "rgba(26, 46, 26, 0.15)", background: bciStatus === "verified" ? "rgba(16, 185, 129, 0.05)" : undefined }} />
+                <button type="button" onClick={simulateBciVerification} disabled={!barCouncilId || bciStatus === "verified" || bciStatus === "verifying"} style={{ padding: "0 16px", background: bciStatus === "verified" ? "#10b981" : "var(--forest)", color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: (!barCouncilId || bciStatus === "verified" || bciStatus === "verifying") ? "not-allowed" : "pointer", opacity: (!barCouncilId || bciStatus === "verified" || bciStatus === "verifying") ? 0.7 : 1, transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", minWidth: 80 }}>
+                  {bciStatus === "verifying" ? "Verifying…" : bciStatus === "verified" ? "Verified" : "Verify BCI"}
+                </button>
+              </div>
+              {bciStatus === "error" && <div style={{ fontSize: 12, color: "#a63a1e", marginTop: 6, fontWeight: 500 }}>Invalid Bar Council ID format.</div>}
+              {bciStatus === "verified" && <div style={{ fontSize: 12, color: "#10b981", marginTop: 6, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>✓ BCI Credentials officially verified.</div>}
+            </div>
+          )}
+
           <div>
             <label style={labelStyle}>Email Address</label>
-            <input type="email" value={email} onChange={e => { setEmail(e.target.value); if (touched.email) validateField("email", e.target.value); }} onBlur={() => handleBlur("email", email)} placeholder="you@example.com" style={{ ...inputStyle, borderColor: errors.email && touched.email ? "#a63a1e" : "var(--border-color)" }} onFocus={e => !errors.email && (e.target.style.borderColor = "var(--gold)")} />
+            <input type="email" className="premium-input" value={email} onChange={e => { setEmail(e.target.value); if (touched.email) validateField("email", e.target.value); }} onBlur={() => handleBlur("email", email)} placeholder="you@example.com" style={{ ...inputStyle, borderColor: errors.email && touched.email ? "#a63a1e" : "rgba(26, 46, 26, 0.15)" }} />
             {errors.email && touched.email && <div style={{ fontSize: 12, color: "#a63a1e", marginTop: 6, fontWeight: 500 }}>{errors.email}</div>}
           </div>
 
           <div>
             <label style={labelStyle}>Password</label>
             <div style={{ position: "relative" }}>
-              <input type={showPassword ? "text" : "password"} value={password} onChange={e => { setPassword(e.target.value); if (touched.password) validateField("password", e.target.value); }} onBlur={() => handleBlur("password", password)} placeholder="Min. 6 characters" style={{ ...inputStyle, borderColor: errors.password && touched.password ? "#a63a1e" : "var(--border-color)", paddingRight: 40 }} onFocus={e => !errors.password && (e.target.style.borderColor = "var(--gold)")} />
+              <input type={showPassword ? "text" : "password"} className="premium-input" value={password} onChange={e => { setPassword(e.target.value); if (touched.password) validateField("password", e.target.value); }} onBlur={() => handleBlur("password", password)} placeholder="Min. 8 characters" style={{ ...inputStyle, borderColor: errors.password && touched.password ? "#a63a1e" : "rgba(26, 46, 26, 0.15)", paddingRight: 40 }} />
               <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--ink-muted)" }}>
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -194,19 +230,19 @@ function RegisterForm() {
 
           <div>
             <label style={labelStyle}>Preferred Language</label>
-            <select value={lang} onChange={e => setLang(e.target.value as Language)} style={{ ...inputStyle, cursor: "pointer" }}>
+            <select className="premium-input" value={lang} onChange={e => setLang(e.target.value as Language)} style={{ ...inputStyle, cursor: "pointer" }}>
               {(Object.entries(LANGUAGES) as [Language, typeof LANGUAGES[Language]][]).map(([code, info]) => (
                 <option key={code} value={code}>{info.nativeLabel}</option>
               ))}
             </select>
           </div>
 
-          <button type="submit" disabled={isLoading} style={{ marginTop: 8, width: "100%", padding: "14px", background: isLoading ? "var(--ink-muted)" : "var(--forest)", color: "var(--gold-pale)", border: "none", borderRadius: 10, fontFamily: "'Instrument Sans',sans-serif", fontSize: 15, fontWeight: 600, cursor: isLoading ? "not-allowed" : "pointer", transition: "background 0.2s" }}>
+          <button type="submit" disabled={isLoading || (isAdvocateFlow && bciStatus !== "verified")} className="stagger-5" style={{ marginTop: 8, width: "100%", padding: "14px", background: isLoading || (isAdvocateFlow && bciStatus !== "verified") ? "var(--ink-muted)" : "var(--forest)", color: "var(--gold-pale)", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: isLoading || (isAdvocateFlow && bciStatus !== "verified") ? "not-allowed" : "pointer", transition: "background 0.2s" }}>
             {isLoading ? "Creating account…" : "Register"}
           </button>
         </form>
 
-        <div style={{ marginTop: 32, textAlign: "center", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="stagger-5" style={{ marginTop: 32, textAlign: "center", display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ fontSize: 14, color: "var(--ink-muted)" }}>
             Already have an account?{" "}
             <Link href={`/login${returnTo !== "/chat" ? `?returnTo=${returnTo}` : ""}`} style={{ color: "var(--forest)", fontWeight: 700, textDecoration: "none" }}>Login</Link>

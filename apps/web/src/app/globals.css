@@ -352,3 +352,90 @@
 }
 .case-card:hover { box-shadow: var(--shadow); transform: translateX(4px); border-color: var(--border-gold); }
 .case-card:hover::before { opacity: 1; }
+
+/* ── Glassmorphism & Premium Utilities ───────────────────────────────────── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(26, 46, 26, 0.05);
+}
+
+.dark .glass-panel {
+  background: rgba(40, 40, 40, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.glass-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.5) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 24px -1px rgba(26, 46, 26, 0.06);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  border-radius: var(--radius-xl);
+}
+
+.glass-card:hover {
+  transform: translateY(-4px) scale(1.005);
+  box-shadow: 0 16px 40px -4px rgba(26, 46, 26, 0.12);
+  border: 1px solid rgba(201, 146, 10, 0.3);
+}
+
+.dark .glass-card {
+  background: linear-gradient(135deg, rgba(35, 35, 35, 0.7) 0%, rgba(20, 20, 20, 0.5) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.5);
+}
+
+.dark .glass-card:hover {
+  box-shadow: 0 12px 40px -4px rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(201, 146, 10, 0.3);
+}
+
+/* Elite inputs */
+.premium-input {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(26, 46, 26, 0.15);
+  transition: all 0.25s ease;
+  backdrop-filter: blur(10px);
+}
+.premium-input:focus {
+  background: #fff;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 146, 10, 0.12);
+  outline: none;
+}
+.dark .premium-input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+}
+.dark .premium-input:focus {
+  background: rgba(20, 20, 20, 0.8);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 146, 10, 0.2);
+}
+
+/* Stagger animations */
+.stagger-1 { animation: fadeSlideUp 0.6s ease both; animation-delay: 0.05s; }
+.stagger-2 { animation: fadeSlideUp 0.6s ease both; animation-delay: 0.1s; }
+.stagger-3 { animation: fadeSlideUp 0.6s ease both; animation-delay: 0.15s; }
+.stagger-4 { animation: fadeSlideUp 0.6s ease both; animation-delay: 0.2s; }
+.stagger-5 { animation: fadeSlideUp 0.6s ease both; animation-delay: 0.25s; }
+
+/* Dashboard Animated Bg */
+.dashboard-bg {
+  background: radial-gradient(circle at 10% 0%, rgba(201, 146, 10, 0.05) 0%, transparent 40%),
+              radial-gradient(circle at 90% 100%, rgba(26, 46, 26, 0.05) 0%, transparent 40%),
+              var(--cream);
+  min-height: 100vh;
+}
+.dark .dashboard-bg {
+  background: radial-gradient(circle at 10% 0%, rgba(201, 146, 10, 0.1) 0%, transparent 40%),
+              radial-gradient(circle at 90% 100%, rgba(26, 46, 26, 0.2) 0%, transparent 40%),
+              var(--background);
+}
+
